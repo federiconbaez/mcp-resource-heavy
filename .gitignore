@@ -3,3 +3,7 @@ __pycache__/
 .mcpforge/
 *.sqlite3
 *.sqlite3-journal
+.mcpmem/
+.mcpauth/
+.mcpres/
+.mcpcross/
