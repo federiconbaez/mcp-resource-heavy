@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Write / verify a sha256sum-compatible manifest of every file in the repository.
 
-    python3 tools/make_manifest.py            # writes evidence/MANIFEST.sha256
+    python3 tools/make_manifest.py            # writes MANIFEST.sha256
     python3 tools/make_manifest.py --check    # verifies the working tree against it (exit 1 on any difference)
 
 The manifest lists every file except .git/, __pycache__/, .mcpres/ and the manifest itself.
-Verify independently with:  cd <repo> && sha256sum -c evidence/MANIFEST.sha256
+Verify independently with:  cd <repo> && sha256sum -c MANIFEST.sha256
 """
 
 import argparse
@@ -14,7 +14,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MANIFEST = os.path.join("evidence", "MANIFEST.sha256")
+MANIFEST = "MANIFEST.sha256"
 SKIP_DIRS = {".git", "__pycache__", ".mcpres"}
 
 

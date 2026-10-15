@@ -17,7 +17,8 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODULES = ["tests.test_schema", "tests.test_jsonrpc", "tests.test_auth", "tests.test_protocol",
-           "tests.test_persistence_audit", "tests.test_http_e2e"]
+           "tests.test_persistence_audit", "tests.test_http_e2e", "tests.test_paging", "tests.test_datasets",
+           "tests.test_resources", "tests.test_prompts_completion", "tests.test_subscriptions"]
 
 MUTANTS = [
     ("M01 ignore token expiry", "mcpres/auth.py", 'if now >= claims["exp"] + self.leeway:', "if False:", {}),
@@ -31,13 +32,22 @@ MUTANTS = [
     ("M09 audit: ignore prev-link", "mcpres/audit.py", 'if entry["prev"] != prev:', "if False:", {}),
     ("M10 audit: ignore entry hash", "mcpres/audit.py", 'if entry_hash(entry) != entry["hash"]:', "if False:", {}),
     ("M11 booleans accepted as ids", "mcpres/jsonrpc.py", "isinstance(value, int) and not isinstance(value, bool)", "isinstance(value, int)", {}),
-    ("M12 respond to notifications (contracts off)", "mcpres/jsonrpc.py", "        if is_note:\n            return None\n        return make_result(rid, result)", "        return make_result(rid, result)", {"MCP_FORGE_CONTRACTS": "0"}),
+    ("M12 respond to notifications (contracts off)", "mcpres/jsonrpc.py", "        if is_note:\n            return None\n        return make_result(rid, result)", "        return make_result(rid, result)", {}),
     ("M13 memory not persistent", "mcpres/memory.py", "sqlite3.connect(self.path, timeout=5.0)", 'sqlite3.connect(":memory:")', {}),
     ("M14 schema ignores additionalProperties:false", "mcpres/schema.py", "if ap is False:", "if False:", {}),
     ("M15 schema treats bool as integer", "mcpres/schema.py", '        if isinstance(value, bool):\n            return False\n        if isinstance(value, int):', "        if isinstance(value, int):", {}),
-    ("M16 HTTP session not bound to subject", "mcpres/transport_http.py", "if app.auth and sub != (session.claims or {}).get(\"sub\"):", "if False:", {}),
+    ("M16 HTTP session not bound to subject (POST path)", "mcpres/transport_http.py", "            if app.auth and sub != (session.claims or {}).get(\"sub\"):", "            if False:", {}),
+    ("M16b SSE stream not bound to subject", "mcpres/transport_http.py", "        if app.auth and sub != (session.claims or {}).get(\"sub\"):\n            self._event(\"session_hijack_attempt\", {\"sub\": sub}, sid, sub)", "        if False:\n            self._event(\"session_hijack_attempt\", {\"sub\": sub}, sid, sub)", {}),
     ("M17 batch always answers (even all-notification)", "mcpres/jsonrpc.py", "return responses or None", "return responses", {}),
-    ("M18 id not echoed (wrong id in results)", "mcpres/jsonrpc.py", "return {\"jsonrpc\": \"2.0\", \"id\": msg_id, \"result\": result}", "return {\"jsonrpc\": \"2.0\", \"id\": 0, \"result\": result}", {"MCP_FORGE_CONTRACTS": "0"}),
+    # --- resource-heavy specific mutants ---------------------------------------------------------------
+    ("M19 cursor list-kind not checked", "mcpres/paging.py", 'if obj["k"] != kind:', "if False:", {}),
+    ("M20 keyset pagination repeats the cursor item", "mcpres/paging.py", "if key(ordered[mid]) <= after:", "if key(ordered[mid]) < after:", {}),
+    ("M21 outbox does not coalesce duplicates", "mcpres/hub.py", 'if any((m["method"], (m.get("params") or {}).get("uri")) == key for m in self._items):', "if False:", {}),
+    ("M22 unsubscribe keeps the subscription", "mcpres/hub.py", "self.subs[sid].discard(uri)", "pass", {}),
+    ("M23 subscription bound not enforced", "mcpres/hub.py", "if uri not in self.subs[sid] and len(self.subs[sid]) >= MAX_SUBSCRIPTIONS:", "if False:", {}),
+    ("M24 non-subscribers get notified", "mcpres/hub.py", "                if uri in uris:\n                    contracts.check(\"SUB-1\"", "                if True:\n                    contracts.check(\"SUB-1\"", {}),
+    ("M25 capability subscribe advertised false", "mcpres/server.py", '"resources": {"subscribe": True, "listChanged": True},', '"resources": {"subscribe": False, "listChanged": True},', {}),
+    ("M18 id not echoed (wrong id in results)", "mcpres/jsonrpc.py", "return {\"jsonrpc\": \"2.0\", \"id\": msg_id, \"result\": result}", "return {\"jsonrpc\": \"2.0\", \"id\": 0, \"result\": result}", {}),
 ]
 
 
