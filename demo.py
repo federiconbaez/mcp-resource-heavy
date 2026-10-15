@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
-"""End-to-end demo: mint token -> initialize -> tools/list -> store -> RESTART server -> recall ->
-resources/read -> prompts/get -> auth failures -> audit verify (+ tamper) -> same over HTTP + mock OIDC.
+"""mcp-resource-heavy end-to-end demo: pagination, static/templated/dynamic/binary resources, completion, rich prompts, subscriptions (stdio + HTTP SSE).
 
-Everything runs against real subprocesses of `python3 -m mcpres`. Exit code 0 only if every step behaves as expected.
+Everything runs against real subprocesses of `python3 -m mcpres` (no mocks). Exit code 0 only if every step behaves as expected.
+Uses only the standard library; no network beyond 127.0.0.1.
 """
 
+import base64
+import hashlib
+import http.client
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.parse
-import http.client
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PY = sys.executable
+PKG = "mcpres"
 STEPS = []
 
 
@@ -43,49 +48,89 @@ def env(**extra):
     return e
 
 
-def cli(*args):
-    say("$ python3 -m mcpres " + " ".join(args))
-    return subprocess.run([PY, "-m", "mcpres", *args], capture_output=True, text=True, cwd=ROOT, env=env())
+def cli(*args, **envx):
+    say("$ python3 -m %s %s" % (PKG, " ".join(args)))
+    return subprocess.run([PY, "-m", PKG, *args], capture_output=True, text=True, cwd=ROOT, env=env(**envx))
+
+
+def short(obj, n=240):
+    t = json.dumps(obj) if not isinstance(obj, str) else obj
+    return t[:n] + (" ..." if len(t) > n else "")
 
 
 class Stdio:
-    def __init__(self, data_dir, issuer, token):
-        self.proc = subprocess.Popen([PY, "-m", "mcpres", "serve", "--data-dir", data_dir, "--issuer", issuer],
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                     cwd=ROOT, env=env(MCP_TOKEN=token))
+    """One `serve` subprocess speaking newline-delimited JSON-RPC; server notifications are collected in ``self.notes``."""
+
+    def __init__(self, data_dir, issuer, token, extra=(), **envx):
+        e = env(**envx)
+        if token:
+            e["MCP_TOKEN"] = token
+        cmd = [PY, "-m", PKG, "serve", "--data-dir", data_dir, *(["--issuer", issuer] if issuer else []), *extra]
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=ROOT, env=e)
         self.n = 0
+        self.notes = []
         say("   (server process started, pid %d, transport=stdio)" % self.proc.pid)
 
     def send(self, obj):
         self.proc.stdin.write(json.dumps(obj).encode() + b"\n")
         self.proc.stdin.flush()
 
-    def call(self, method, params=None):
+    def read(self):
+        line = self.proc.stdout.readline()
+        return json.loads(line) if line else None
+
+    def call(self, method, params=None, quiet=False):
         self.n += 1
         msg = {"jsonrpc": "2.0", "id": self.n, "method": method}
         if params is not None:
             msg["params"] = params
-        say("-> " + json.dumps(msg)[:200])
+        if not quiet:
+            say("-> " + short(msg, 200))
         self.send(msg)
-        out = json.loads(self.proc.stdout.readline())
-        say("<- " + json.dumps(out)[:260] + (" ..." if len(json.dumps(out)) > 260 else ""))
+        while True:
+            out = self.read()
+            if out is None:
+                return None
+            if "method" in out and "id" not in out:
+                self.notes.append(out)
+                say("<= (notification) " + short(out))
+                continue
+            if not quiet:
+                say("<- " + short(out, 260))
+            return out
+
+    def next_note(self):
+        """Read the next server notification line (blocks); used right after a response that must be followed by one."""
+        out = self.read()
+        say("<= (notification) " + short(out))
         return out
 
     def notify(self, method):
         say("-> " + json.dumps({"jsonrpc": "2.0", "method": method}) + "   (notification, no reply expected)")
         self.send({"jsonrpc": "2.0", "method": method})
 
-    def stop(self):
+    def tool(self, name, args, quiet=False):
+        out = self.call("tools/call", {"name": name, "arguments": args}, quiet)
+        return out
+
+    def stop(self, kill=False):
+        if kill:
+            self.proc.send_signal(signal.SIGKILL)
+            self.proc.wait(10)
+            self.proc.stdin.close()
+            self.proc.stdout.close()
+            say("   (server process pid %d killed with SIGKILL)" % self.proc.pid)
+            return -9
         self.proc.stdin.close()
         code = self.proc.wait(10)
         self.proc.stdout.close()
         say("   (server process pid %d exited with code %s)" % (self.proc.pid, code))
         return code
 
-    def handshake(self):
-        res = self.call("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
-                                       "clientInfo": {"name": "demo-client", "version": "1.0"}})
-        self.notify("notifications/initialized")
+    def handshake(self, version="2025-03-26"):
+        res = self.call("initialize", {"protocolVersion": version, "capabilities": {}, "clientInfo": {"name": "demo-client", "version": "1.0"}})
+        if "result" in res:
+            self.notify("notifications/initialized")
         return res
 
 
@@ -101,135 +146,200 @@ def free_port():
     return p
 
 
+class Http:
+    def __init__(self, port, token=None):
+        self.port, self.token, self.sid = port, token, None
+        self.c = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
+
+    def req(self, method, path, body=None, headers=None, session=True):
+        h = {}
+        if self.token:
+            h["Authorization"] = "Bearer " + self.token
+        if self.sid and session:
+            h["Mcp-Session-Id"] = self.sid
+        h.update(headers or {})
+        if body is not None and not isinstance(body, (str, bytes)):
+            body = json.dumps(body)
+        self.c.request(method, path, body=body, headers=h)
+        r = self.c.getresponse()
+        data = r.read().decode()
+        return r.status, {k.lower(): v for k, v in r.getheaders()}, data
+
+    def rpc(self, method, params=None, mid=1, quiet=False):
+        msg = {"jsonrpc": "2.0", "id": mid, "method": method}
+        if params is not None:
+            msg["params"] = params
+        if not quiet:
+            say("POST /mcp -> " + short(msg, 200))
+        st, hdr, data = self.req("POST", "/mcp", msg, {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"})
+        if "mcp-session-id" in hdr and not self.sid:
+            self.sid = hdr["mcp-session-id"]
+        out = json.loads(data) if data else None
+        if not quiet:
+            say("<- HTTP %d %s" % (st, short(out, 240)))
+        return st, out
+
+    def notify(self, method):
+        st, _, _ = self.req("POST", "/mcp", {"jsonrpc": "2.0", "method": method}, {"Content-Type": "application/json"})
+        return st
+
+
+def start_http(data, issuer, port, extra=(), **envx):
+    p = subprocess.Popen([PY, "-m", PKG, "serve", "--transport", "http", "--port", str(port), *(["--issuer", issuer] if issuer else []),
+                          "--data-dir", data, *extra], stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, cwd=ROOT, env=env(**envx), text=True)
+    say("   " + p.stderr.readline().strip())
+    return p
+
+
+def stop_http(p):
+    p.terminate()
+    p.wait(5)
+    p.stderr.close()
+
+
+def init_params(version="2025-03-26"):
+    return {"protocolVersion": version, "capabilities": {}, "clientInfo": {"name": "demo", "version": "1"}}
+
+
+def walk(call, method, key):
+    items, cursor, pages = [], None, 0
+    while True:
+        out = call(method, {"cursor": cursor} if cursor else {}, quiet=True)
+        items += out["result"][key]
+        pages += 1
+        cursor = out["result"].get("nextCursor")
+        if not cursor:
+            return items, pages
+
+
 def main():
     work = tempfile.mkdtemp(prefix="mcpres-demo-")
     data = os.path.join(work, "data")
     port = free_port()
     issuer = "http://127.0.0.1:%d" % port
     say("mcp-resource-heavy demo  |  python %s  |  workdir %s" % (sys.version.split()[0], work))
-    say("Simplified OIDC (HS256, mock issuer) - NOT a certified OIDC flow. See SECURITY.md.")
     try:
-        banner("1. Mint a token with the CLI (simplified OIDC: iss/aud/exp/nbf/iat/scope, HS256)")
-        r = cli("mint-token", "--data-dir", data, "--issuer", issuer, "--sub", "demo-user", "--show-claims")
+        banner("1. Token (HS256 simplified OIDC) and a stdio session")
+        r = cli("mint-token", "--data-dir", data, "--issuer", issuer, "--sub", "demo-user")
         token = r.stdout.strip()
-        say(r.stderr.rstrip())
-        say("token (truncated): %s..." % token[:60])
-        must(r.returncode == 0 and token.count(".") == 2, "token minted")
-
-        banner("2. Server #1 (stdio): initialize -> tools/list -> store memories")
+        must(r.returncode == 0 and token.count(".") == 2, "token minted with all scopes (mcp data:read data:write memory:* audit:read)")
         s = Stdio(data, issuer, token)
-        init = s.handshake()
-        must(init["result"]["protocolVersion"] == "2025-03-26", "protocol version negotiated: 2025-03-26")
+        init = s.handshake("2025-06-18")
         caps = init["result"]["capabilities"]
-        must({"tools", "resources", "prompts"} <= set(caps), "capabilities advertise tools, resources, prompts")
-        tools = s.call("tools/list")["result"]["tools"]
-        say("   tools: " + ", ".join(t["name"] for t in tools))
-        must(len(tools) == 4, "4 memory tools listed with strict JSON schemas")
-        a = text(s.call("tools/call", {"name": "memory_store", "arguments": {
-            "content": "Federico prefiere caf\u00e9 sin az\u00facar por la ma\u00f1ana", "tags": ["preferencias", "cafe"], "importance": 4}}))
-        b = text(s.call("tools/call", {"name": "memory_store", "arguments": {
-            "content": "The MCP demo must survive a server restart", "tags": ["demo"]}}))
-        must(a["stored"]["id"] == 1 and b["stored"]["id"] == 2, "two memories stored (ids 1, 2) in SQLite")
-        bad = s.call("tools/call", {"name": "memory_store", "arguments": {"content": "x", "importance": 9, "bogus": True}})
-        must(bad["result"]["isError"] is True, "schema violation -> isError result (not a protocol error)")
-        must(s.call("tools/call", {"name": "nope", "arguments": {}})["error"]["code"] == -32602, "unknown tool -> JSON-RPC error -32602")
+        must(caps["resources"] == {"subscribe": True, "listChanged": True} and caps["completions"] == {}, "capabilities: resources.subscribe/listChanged and completions advertised")
 
-        banner("3. RESTART: stop server #1, start server #2 on the same data dir")
-        must(s.stop() == 0, "server #1 stopped cleanly")
-        s = Stdio(data, issuer, token)
-        s.handshake()
-        found = text(s.call("tools/call", {"name": "memory_recall", "arguments": {"query": "CAFE manana"}}))
-        must(found["count"] == 1 and "caf\u00e9" in found["results"][0]["content"], "memory recalled after restart (case/accent-insensitive search)")
+        banner("2. Cursor pagination over ~145 resources")
+        items, pages = walk(s.call, "resources/list", "resources")
+        uris = [i["uri"] for i in items]
+        say("   %d resources in %d pages of <= 25; schemes: %s" % (len(uris), pages, ", ".join(sorted({u.split('://')[0] for u in uris}))))
+        must(len(uris) == len(set(uris)) and uris == sorted(uris) and pages >= 5, "every page walked, no duplicates, stable order")
+        must(s.call("resources/list", {"cursor": "not-a-cursor"})["error"]["code"] == -32602, "invalid cursor -> -32602")
 
-        banner("4. resources/read and prompts/get")
-        idx = json.loads(s.call("resources/read", {"uri": "memory://index"})["result"]["contents"][0]["text"])
-        must(idx["total"] == 2, "memory://index reports 2 entries")
-        ent = json.loads(s.call("resources/read", {"uri": "memory://entry/2"})["result"]["contents"][0]["text"])
-        must(ent["content"].startswith("The MCP demo"), "memory://entry/{id} template resolves")
-        must(s.call("resources/read", {"uri": "memory://entry/999"})["error"]["code"] == -32002, "missing resource -> -32002")
-        pr = s.call("prompts/get", {"name": "recall_and_summarize", "arguments": {"query": "restart", "style": "terse"}})
-        must("survive a server restart" in pr["result"]["messages"][0]["content"]["text"], "prompts/get embeds recalled memory")
-        must(s.call("prompts/get", {"name": "recall_and_summarize", "arguments": {}})["error"]["code"] == -32602, "missing prompt arg -> -32602")
-        chain = json.loads(s.call("resources/read", {"uri": "audit://chain"})["result"]["contents"][0]["text"])
-        must(chain["chain"]["ok"] and chain["contracts"]["violated"] == 0,
-             "audit://chain: hash chain valid (%d entries), %d runtime contract checks, 0 violations" % (chain["chain"]["count"], chain["contracts"]["checked"]))
+        banner("3. Static, templated, dynamic and binary resources")
+        about = s.call("resources/read", {"uri": "static://about"})["result"]["contents"][0]
+        must(about["mimeType"] == "text/markdown", "static://about (text/markdown)")
+        ar = json.loads(s.call("resources/read", {"uri": "country://AR"})["result"]["contents"][0]["text"])
+        must(ar["capital"] == "Buenos Aires", "templated country://{iso2} -> %s, capital %s (approximate dataset)" % (ar["name"], ar["capital"]))
+        fe = json.loads(s.call("resources/read", {"uri": "element://Fe"})["result"]["contents"][0]["text"])
+        must(fe["number"] == 26, "templated element://{symbol} -> Z=%d" % fe["number"])
+        must(s.call("resources/read", {"uri": "country://ZZ"})["error"]["code"] == -32002, "unknown templated resource -> -32002")
+        v0 = json.loads(s.call("resources/read", {"uri": "dyn://counter"})["result"]["contents"][0]["text"])["value"]
+        bump = s.tool("counter_bump", {"by": 5})
+        v1 = json.loads(s.call("resources/read", {"uri": "dyn://counter"})["result"]["contents"][0]["text"])["value"]
+        must(v1 == v0 + 5, "dynamic dyn://counter changed %d -> %d after counter_bump" % (v0, v1))
+        c1 = json.loads(s.call("resources/read", {"uri": "dyn://clock"}, )["result"]["contents"][0]["text"])["utc"]
+        time.sleep(0.02)
+        c2 = json.loads(s.call("resources/read", {"uri": "dyn://clock"})["result"]["contents"][0]["text"])["utc"]
+        must(c1 < c2, "dynamic dyn://clock differs between reads (%s < %s)" % (c1, c2))
+        blob = s.call("resources/read", {"uri": "blob://sample.png"})["result"]["contents"][0]
+        raw = base64.b64decode(blob["blob"], validate=True)
+        must(blob["mimeType"] == "image/png" and raw[:8] == b"\x89PNG\r\n\x1a\n", "binary blob://sample.png: %d bytes, PNG signature" % len(raw))
+        digest = text(s.tool("resource_digest", {"uri": "blob://sample.png"}, quiet=True))
+        must(digest["sha256"] == hashlib.sha256(raw).hexdigest(), "server-side SHA-256 equals independent SHA-256 of the decoded blob")
+
+        banner("4. completion/complete and a multi-message prompt with embedded resources")
+        comp = s.call("completion/complete", {"ref": {"type": "ref/prompt", "name": "country_briefing"}, "argument": {"name": "country", "value": "ar"}})
+        must(comp["result"]["completion"]["values"] == ["AR", "Argentina"], "completion for prompt argument 'country' = 'ar'")
+        comp = s.call("completion/complete", {"ref": {"type": "ref/resource", "uri": "element://{symbol}"}, "argument": {"name": "symbol", "value": "C"}})
+        must("Co" in comp["result"]["completion"]["values"], "completion for resource template variable")
+        pr = s.call("prompts/get", {"name": "country_briefing", "arguments": {"country": "Argentina", "audience": "traveler"}}, )["result"]
+        roles = [m["role"] for m in pr["messages"]]
+        kinds = [m["content"]["type"] for m in pr["messages"]]
+        must(roles == ["user", "user", "user", "assistant", "user"] and kinds.count("resource") == 2, "prompt has %d messages (%s), 2 embedded resources" % (len(roles), "/".join(roles)))
+        must(s.call("prompts/get", {"name": "country_briefing", "arguments": {"country": "Atlantis"}})["error"]["code"] == -32602, "prompt argument validation -> -32602")
+
+        banner("5. Subscriptions over stdio: notification follows the response that caused it")
+        must(s.call("resources/subscribe", {"uri": "dyn://counter"})["result"] == {}, "subscribed to dyn://counter")
+        out = s.tool("counter_bump", {})
+        note = s.next_note()
+        must(out["result"]["isError"] is False and note["method"] == "notifications/resources/updated" and note["params"]["uri"] == "dyn://counter", "counter_bump -> response, then notifications/resources/updated")
+        out = s.tool("glossary_add", {"term": "demo term", "definition": "A term added during the demo."})
+        note = s.next_note()
+        must(note["method"] == "notifications/resources/list_changed", "glossary_add of a new term -> notifications/resources/list_changed")
+        must(s.call("resources/read", {"uri": "glossary://term/demo%20term"})["result"]["contents"][0]["uri"] == "glossary://term/demo%20term", "the new term is a readable resource")
+        s.call("resources/unsubscribe", {"uri": "dyn://counter"})
         s.stop()
 
-        banner("5. Auth failures and scopes (stdio)")
-        for label, args in (("expired token", ["--ttl=-60"]), ("wrong audience", ["--aud", "other-service"]),
-                            ("missing base scope", ["--scope", "memory:read"])):
-            t = cli("mint-token", "--data-dir", data, "--issuer", issuer, *args).stdout.strip()
-            bad_s = Stdio(data, issuer, t)
-            res = bad_s.call("initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "d", "version": "1"}})
-            must("error" in res, "%s rejected at initialize (code %s)" % (label, res["error"]["code"]))
-            bad_s.stop()
-        ro = cli("mint-token", "--data-dir", data, "--issuer", issuer, "--scope", "mcp memory:read").stdout.strip()
-        s = Stdio(data, issuer, ro)
+        banner("6. RESTART: mutable resources persist (counter, user glossary); --page-size 5 changes paging")
+        s = Stdio(data, issuer, token, extra=("--page-size", "5"))
         s.handshake()
-        res = s.call("tools/call", {"name": "memory_store", "arguments": {"content": "should be refused"}})
-        must(res["error"]["code"] == -32003, "read-only token cannot memory_store (-32003 insufficient scope)")
+        must(json.loads(s.call("resources/read", {"uri": "dyn://counter"})["result"]["contents"][0]["text"])["value"] == v1 + 1, "counter survived the restart (%d)" % (v1 + 1))
+        items, pages = walk(s.call, "resources/list", "resources")
+        must(pages > 25 and "glossary://term/demo%20term" in [i["uri"] for i in items], "page size 5 -> %d pages, user term included" % pages)
         s.stop()
 
-        banner("6. Tamper-evident audit log")
-        r = cli("audit-verify", "--data-dir", data)
-        must(r.returncode == 0, r.stderr.strip())
-        log = os.path.join(data, "audit.log")
-        copy = os.path.join(work, "audit.tampered")
-        with open(log, "rb") as fh:
-            raw = fh.read()
-        with open(copy, "wb") as fh:
-            fh.write(raw.replace(b"prefiere", b"PREFIERE", 1))
-        r = cli("audit-verify", "--data-dir", data, "--file", copy)
-        must(r.returncode == 1, "tampered copy detected: " + r.stderr.strip())
-
-        banner("7. Same server over Streamable HTTP + mock OIDC issuer (client_credentials)")
-        p = subprocess.Popen([PY, "-m", "mcpres", "serve", "--transport", "http", "--port", str(port), "--issuer", issuer, "--data-dir", data],
-                             stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, cwd=ROOT, env=env(), text=True)
+        banner("7. HTTP: OIDC token, session, subscription and an SSE notification stream")
+        p = start_http(data, issuer, port)
         try:
-            say("   " + p.stderr.readline().strip())
-            c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
-
-            def req(method, path, body=None, headers=None):
-                c.request(method, path, body=body, headers=headers or {})
-                r = c.getresponse()
-                return r.status, {k.lower(): v for k, v in r.getheaders()}, r.read().decode()
-
-            st, _, body = req("GET", "/.well-known/openid-configuration")
-            doc = json.loads(body)
-            say("GET /.well-known/openid-configuration -> %d  token_endpoint=%s" % (st, doc["token_endpoint"]))
-            must(st == 200 and doc["issuer"] == issuer, "discovery document served")
+            c = Http(port)
             secret = cli("client-secret", "--data-dir", data, "demo-client").stdout.strip()
-            form = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": "demo-client", "client_secret": secret, "scope": "mcp memory:read memory:write"})
-            st, _, body = req("POST", "/oauth/token", form, {"Content-Type": "application/x-www-form-urlencoded"})
+            form = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": "demo-client", "client_secret": secret,
+                                           "scope": "mcp data:read data:write memory:read memory:write"})
+            st, _, body = c.req("POST", "/oauth/token", form, {"Content-Type": "application/x-www-form-urlencoded"})
             tok = json.loads(body)
-            say("POST /oauth/token -> %d  token_type=%s expires_in=%s scope=%r" % (st, tok["token_type"], tok["expires_in"], tok["scope"]))
-            must(st == 200, "access token issued by mock issuer")
-            H = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
-            st, _, body = req("POST", "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}), H)
-            must(st == 401, "POST /mcp without bearer token -> 401")
-            H["Authorization"] = "Bearer " + tok["access_token"]
-            st, hdr, body = req("POST", "/mcp", json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-                "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "http-demo", "version": "1"}}}), H)
-            sid = hdr["mcp-session-id"]
-            say("POST initialize -> %d, Mcp-Session-Id: %s, protocolVersion=%s" % (st, sid, json.loads(body)["result"]["protocolVersion"]))
-            must(st == 200 and sid, "initialize over HTTP returns a session id")
-            H["Mcp-Session-Id"] = sid
-            st, _, body = req("POST", "/mcp", json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}), H)
-            must(st == 202 and body == "", "notification -> 202 Accepted, empty body")
-            st, _, body = req("POST", "/mcp", json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "memory_recall", "arguments": {"query": "restart"}}}), H)
-            res = json.loads(body)
-            say("tools/call memory_recall over HTTP -> %d, structuredContent.count=%s" % (st, res["result"]["structuredContent"]["count"]))
-            must(res["result"]["structuredContent"]["count"] == 1, "HTTP sees the memory stored over stdio (shared SQLite)")
-            st, hdr, _ = req("GET", "/mcp", headers={"Authorization": H["Authorization"], "Accept": "text/event-stream"})
-            must(st == 405, "GET /mcp -> 405 (no SSE stream offered)")
-            st, _, _ = req("DELETE", "/mcp", headers={"Authorization": H["Authorization"], "Mcp-Session-Id": sid})
-            must(st == 200, "DELETE /mcp terminates the session")
-        finally:
-            p.terminate()
-            p.wait(5)
-            p.stderr.close()
+            must(st == 200, "access token from the mock issuer (scope %r)" % tok["scope"])
+            c.token = tok["access_token"]
+            st, out = c.rpc("initialize", init_params("2025-06-18"))
+            must(st == 200 and c.sid, "initialize -> session id")
+            c.notify("notifications/initialized")
+            st, out = c.rpc("resources/subscribe", {"uri": "dyn://counter"}, 2)
+            must(out["result"] == {}, "subscribed over HTTP")
+            events = []
+            ready = threading.Event()
 
-        banner("8. Final audit chain check across both transports")
+            def reader():
+                conn = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
+                conn.request("GET", "/mcp", headers={"Authorization": "Bearer " + c.token, "Accept": "text/event-stream", "Mcp-Session-Id": c.sid})
+                resp = conn.getresponse()
+                ready.set()
+                data_lines = []
+                for raw_line in iter(resp.fp.readline, b""):
+                    line = raw_line.decode().rstrip("\r\n")
+                    if line.startswith("data: "):
+                        data_lines.append(line[6:])
+                    elif line == "" and data_lines:
+                        events.append(json.loads("".join(data_lines)))
+                        say("   SSE event: " + short(events[-1]))
+                        data_lines = []
+
+            t = threading.Thread(target=reader, daemon=True)
+            t.start()
+            ready.wait(5)
+            time.sleep(0.2)
+            c.rpc("tools/call", {"name": "counter_bump", "arguments": {}}, 3)
+            for _ in range(50):
+                if events:
+                    break
+                time.sleep(0.1)
+            must(events and events[0]["method"] == "notifications/resources/updated" and events[0]["params"]["uri"] == "dyn://counter", "GET /mcp SSE stream delivered notifications/resources/updated")
+            st, _, _ = c.req("DELETE", "/mcp")
+            must(st == 200, "DELETE /mcp ends the session")
+            t.join(5)
+            must(not t.is_alive(), "the SSE stream was closed by the server")
+        finally:
+            stop_http(p)
+
+        banner("8. Audit chain across everything above")
         r = cli("audit-verify", "--data-dir", data)
         must(r.returncode == 0, r.stderr.strip())
         banner("DEMO OK - %d/%d steps passed" % (sum(1 for _, ok in STEPS if ok), len(STEPS)))
