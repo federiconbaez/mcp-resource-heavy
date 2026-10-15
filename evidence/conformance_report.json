@@ -1,0 +1,1434 @@
+{
+  "duration_s": 38.3,
+  "final_audit_chain": {
+    "count": 4270,
+    "error": null,
+    "head": "b9f720c20dc9ff3c4ac5ef964f110d9babe9c25ffdbda72fc6683fe6b6a2bccd",
+    "line": null,
+    "ok": true
+  },
+  "final_invariants": [
+    {
+      "chain_entries": 4262,
+      "chain_head": "fd0d217b876ef9b99cd7dce65ed18540dbac287ae1a0a3c7b79c3d103f928d23",
+      "chain_ok": true,
+      "contracts": {
+        "by_name": {},
+        "checked": 21,
+        "violated": 0
+      },
+      "ok": true,
+      "transport": "stdio"
+    },
+    {
+      "chain_entries": 4269,
+      "chain_head": "8b42dd24caed73c85157825ce0d1eb1dcec1cd782e4f1277f84d58eb944b9a71",
+      "chain_ok": true,
+      "contracts": {
+        "by_name": {},
+        "checked": 4560,
+        "violated": 0
+      },
+      "ok": true,
+      "transport": "http"
+    }
+  ],
+  "note": "Black-box suite written by the same author as the server; it demonstrates self-consistency and coverage of the listed spec clauses, not independent certification.",
+  "python": "3.13.5",
+  "results": [
+    {
+      "detail": "",
+      "id": "RPC-001",
+      "ms": 120,
+      "spec": "JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "Malformed JSON -> -32700 with id null",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-002",
+      "ms": 64,
+      "spec": "JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "Wrong structure -> -32600 with id null",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-003",
+      "ms": 61,
+      "spec": "JSON-RPC 2.0 s4",
+      "status": "pass",
+      "title": "Missing/incorrect jsonrpc member -> -32600, valid id echoed",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-004",
+      "ms": 98,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Empty batch -> single -32600 object",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-005",
+      "ms": 60,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Batch of non-requests -> array of -32600, one per element",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-006",
+      "ms": 67,
+      "spec": "JSON-RPC 2.0 s4; MCP basic",
+      "status": "pass",
+      "title": "id must be string/integer: bool, float, null, array rejected with id null",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-007",
+      "ms": 71,
+      "spec": "JSON-RPC 2.0 s5",
+      "status": "pass",
+      "title": "ids echoed verbatim (unicode string, huge int, negative, empty string)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-008",
+      "ms": 63,
+      "spec": "JSON-RPC 2.0 s4.1",
+      "status": "pass",
+      "title": "Notification (no id) yields no response",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-009",
+      "ms": 89,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Batch: one response per request, none for notifications",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-010",
+      "ms": 76,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Batch of only notifications yields no response",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-011",
+      "ms": 77,
+      "spec": "JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "Unknown method -> -32601 (after initialize)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-012",
+      "ms": 60,
+      "spec": "JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "params of wrong type -> -32602 / -32600",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-013",
+      "ms": 74,
+      "spec": "JSON-RPC 2.0 s5.1 / RFC 8259",
+      "status": "pass",
+      "title": "Non-standard JSON constants (NaN) -> -32700",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-014",
+      "ms": 78,
+      "spec": "JSON-RPC 2.0 s5.1 / RFC 8259 s8.1",
+      "status": "pass",
+      "title": "Invalid UTF-8 -> -32700 and server survives",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-015",
+      "ms": 62,
+      "spec": "robustness",
+      "status": "pass",
+      "title": "Deeply nested JSON does not crash the server (-32700)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-001",
+      "ms": 69,
+      "spec": "MCP lifecycle: initialization",
+      "status": "pass",
+      "title": "Requests before initialize are rejected (tools, resources, prompts)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-002",
+      "ms": 72,
+      "spec": "MCP utilities: ping",
+      "status": "pass",
+      "title": "ping is allowed before initialize",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-003",
+      "ms": 61,
+      "spec": "MCP lifecycle",
+      "status": "pass",
+      "title": "Notifications before initialize are ignored silently",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-004",
+      "ms": 221,
+      "spec": "MCP lifecycle: version negotiation",
+      "status": "pass",
+      "title": "initialize negotiates each supported protocolVersion (echo)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-005",
+      "ms": 65,
+      "spec": "MCP lifecycle: version negotiation",
+      "status": "pass",
+      "title": "Unsupported protocolVersion -> server answers with 2025-03-26",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-006",
+      "ms": 59,
+      "spec": "MCP lifecycle: capability negotiation",
+      "status": "pass",
+      "title": "initialize result: serverInfo + capabilities for tools/resources/prompts",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-007",
+      "ms": 62,
+      "spec": "MCP lifecycle; JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "initialize with invalid params -> -32602",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-008",
+      "ms": 61,
+      "spec": "MCP lifecycle",
+      "status": "pass",
+      "title": "Second initialize on the same session is rejected",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-009",
+      "ms": 97,
+      "spec": "MCP 2025-03-26 basic: batching rules",
+      "status": "pass",
+      "title": "initialize inside a batch is rejected",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "LIF-010",
+      "ms": 139,
+      "spec": "MCP changelog 2025-06-18 (batching removed)",
+      "status": "pass",
+      "title": "Batching allowed on 2025-03-26, rejected on negotiated 2025-06-18",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "TLS-001",
+      "ms": 63,
+      "spec": "MCP server/tools: listing",
+      "status": "pass",
+      "title": "tools/list returns strict object schemas (additionalProperties:false)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "TLS-002",
+      "ms": 62,
+      "spec": "MCP server/tools: error handling",
+      "status": "pass",
+      "title": "Unknown tool -> -32602; missing name -> -32602",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "TLS-003",
+      "ms": 71,
+      "spec": "MCP server/tools: tool execution errors",
+      "status": "pass",
+      "title": "Schema violations are tool errors (isError:true), not protocol errors",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "TLS-004",
+      "ms": 67,
+      "spec": "MCP server/tools: calling",
+      "status": "pass",
+      "title": "memory_store -> memory_recall round trip (case/accent-insensitive)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "TLS-005",
+      "ms": 75,
+      "spec": "MCP server/tools",
+      "status": "pass",
+      "title": "memory_forget removes an entry; unknown id is a tool error",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "TLS-006",
+      "ms": 147,
+      "spec": "MCP 2025-06-18 server/tools: structured content",
+      "status": "pass",
+      "title": "structuredContent only on negotiated 2025-06-18",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "TLS-007",
+      "ms": 72,
+      "spec": "MCP utilities: pagination",
+      "status": "pass",
+      "title": "tools/list rejects an invalid cursor (-32602); accepts _meta",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RES-001",
+      "ms": 85,
+      "spec": "MCP server/resources: listing",
+      "status": "pass",
+      "title": "resources/list exposes memory://index and audit://chain",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RES-002",
+      "ms": 73,
+      "spec": "MCP server/resources: reading",
+      "status": "pass",
+      "title": "resources/read memory://index returns JSON contents",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RES-003",
+      "ms": 64,
+      "spec": "MCP server/resources: templates",
+      "status": "pass",
+      "title": "resources/templates/list includes memory://entry/{id}",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RES-004",
+      "ms": 73,
+      "spec": "MCP server/resources",
+      "status": "pass",
+      "title": "Read of a stored entry via template URI",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RES-005",
+      "ms": 75,
+      "spec": "MCP server/resources: error handling",
+      "status": "pass",
+      "title": "Unknown resource -> -32002; missing uri -> -32602",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RES-006",
+      "ms": 86,
+      "spec": "formal-verification hooks",
+      "status": "pass",
+      "title": "audit://chain reports a valid chain and zero contract violations",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "PRM-001",
+      "ms": 60,
+      "spec": "MCP server/prompts: listing",
+      "status": "pass",
+      "title": "prompts/list declares arguments",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "PRM-002",
+      "ms": 80,
+      "spec": "MCP server/prompts: getting",
+      "status": "pass",
+      "title": "prompts/get embeds recalled memories as user message",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "PRM-003",
+      "ms": 73,
+      "spec": "MCP server/prompts: error handling",
+      "status": "pass",
+      "title": "prompts/get validates arguments (-32602)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-001",
+      "ms": 75,
+      "spec": "RFC 6750 s3 (simplified)",
+      "status": "pass",
+      "title": "Missing token rejected",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-002",
+      "ms": 121,
+      "spec": "RFC 7519 s4.1.4",
+      "status": "pass",
+      "title": "Expired token rejected (exp)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-003",
+      "ms": 206,
+      "spec": "RFC 7515 s5.2",
+      "status": "pass",
+      "title": "Tampered signature rejected (constant-time HMAC compare)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-004",
+      "ms": 116,
+      "spec": "RFC 7519 s4.1.3",
+      "status": "pass",
+      "title": "Wrong audience rejected (aud)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-005",
+      "ms": 129,
+      "spec": "RFC 7519 s4.1.1",
+      "status": "pass",
+      "title": "Wrong issuer rejected (iss)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-006",
+      "ms": 222,
+      "spec": "RFC 8725 s3.1",
+      "status": "pass",
+      "title": "alg=none and garbage tokens rejected",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-007",
+      "ms": 159,
+      "spec": "scope claims",
+      "status": "pass",
+      "title": "Per-tool scope enforced (-32003): read-only token cannot store/forget",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-008",
+      "ms": 121,
+      "spec": "scope claims",
+      "status": "pass",
+      "title": "Token lacking base 'mcp' scope rejected at initialize",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUT-010",
+      "ms": 67,
+      "spec": "design requirement",
+      "status": "pass",
+      "title": "--no-auth is an explicit opt-in and then needs no token",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "STD-001",
+      "ms": 134,
+      "spec": "design requirement",
+      "status": "pass",
+      "title": "Memory persists across server restarts (new process, same data dir)",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "STD-002",
+      "ms": 74,
+      "spec": "MCP 2025-03-26 transports: stdio",
+      "status": "pass",
+      "title": "CRLF frames accepted, blank lines ignored, stdout carries only JSON",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "STD-003",
+      "ms": 74,
+      "spec": "robustness",
+      "status": "pass",
+      "title": "Oversized line (>1 MiB) -> -32600 and the server keeps serving",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "STD-004",
+      "ms": 69,
+      "spec": "MCP 2025-03-26 transports: stdio shutdown",
+      "status": "pass",
+      "title": "Server exits cleanly (0) on stdin EOF",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "FUZ-001",
+      "ms": 249,
+      "spec": "property-based robustness",
+      "status": "pass",
+      "title": "Seeded fuzz (200 cases): never crashes, valid JSON-RPC, no -32603, ids echoed",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "AUD-001",
+      "ms": 240,
+      "spec": "hash-chained audit",
+      "status": "pass",
+      "title": "Audit log chain verifies via CLI; flipping one byte is detected; truncation caught with anchor",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "PAG-001",
+      "ms": 83,
+      "spec": "MCP utilities: pagination",
+      "status": "pass",
+      "title": "resources/list paginates: >1 page, no duplicates, sorted, every page <= 25",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "PAG-002",
+      "ms": 98,
+      "spec": "MCP utilities: pagination",
+      "status": "pass",
+      "title": "Invalid / foreign / non-string cursors -> -32602 on all four list methods",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "PAG-003",
+      "ms": 75,
+      "spec": "MCP utilities: pagination",
+      "status": "pass",
+      "title": "Short lists (tools, prompts, templates) fit one page and walk cleanly",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RSX-001",
+      "ms": 74,
+      "spec": "MCP server/resources: static content",
+      "status": "pass",
+      "title": "Static resources: stable bytes across reads, correct mime types",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RSX-002",
+      "ms": 68,
+      "spec": "MCP server/resources: templates",
+      "status": "pass",
+      "title": "Templated resources resolve (country/element/unit/glossary); unknown -> -32002 with uri echoed",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RSX-003",
+      "ms": 128,
+      "spec": "MCP server/resources: dynamic content",
+      "status": "pass",
+      "title": "Dynamic resources: dyn://counter changes with counter_bump; dyn://clock differs between reads",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RSX-004",
+      "ms": 85,
+      "spec": "MCP server/resources: binary content",
+      "status": "pass",
+      "title": "Binary resources: valid base64, matches listed size/mime, PNG signature, independent SHA-256 via tool",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RSX-005",
+      "ms": 244,
+      "spec": "MCP server/resources: list/read consistency",
+      "status": "pass",
+      "title": "Every listed resource is readable and has exactly one of text/blob",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "SUB-001",
+      "ms": 74,
+      "spec": "MCP server/resources: capabilities",
+      "status": "pass",
+      "title": "Capabilities are honest: subscribe/listChanged advertised => subscribe works and notifications really arrive",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "SUB-002",
+      "ms": 386,
+      "spec": "MCP server/resources: subscriptions",
+      "status": "pass",
+      "title": "updated only for subscribers; none after unsubscribe; other sessions unaffected",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "SUB-003",
+      "ms": 79,
+      "spec": "MCP server/resources: subscriptions",
+      "status": "pass",
+      "title": "subscribe validates: unknown -> -32002, non-canonical -> -32602 (with canonical hint), bad params -> -32602",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "SUB-004",
+      "ms": 183,
+      "spec": "MCP server/resources: notifications",
+      "status": "pass",
+      "title": "glossary_add: new term -> list_changed; replace -> updated(term) without list_changed; remove -> list_changed",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "SUB-006",
+      "ms": 77,
+      "spec": "MCP transports: stdio",
+      "status": "pass",
+      "title": "stdio: the notification is written right after the response that caused it",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "CMP-001",
+      "ms": 65,
+      "spec": "MCP utilities: completion",
+      "status": "pass",
+      "title": "completion/complete: prompt arguments, context, result shape, 100-value cap",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "CMP-002",
+      "ms": 67,
+      "spec": "MCP utilities: completion",
+      "status": "pass",
+      "title": "completion/complete for resource templates; invalid refs -> -32602",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "PRM-004",
+      "ms": 63,
+      "spec": "MCP server/prompts: embedded resources",
+      "status": "pass",
+      "title": "Multi-message prompts: roles alternate sensibly; resources and an image are embedded",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "PRM-005",
+      "ms": 65,
+      "spec": "MCP server/prompts: argument validation",
+      "status": "pass",
+      "title": "Prompt argument validation: unknown country/enum/extra/missing -> -32602 with an errors list",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "TLS-008",
+      "ms": 152,
+      "spec": "MCP server/tools",
+      "status": "pass",
+      "title": "Dataset tools: structured results, resource_link only on 2025-06-18, domain errors are isError",
+      "transport": "stdio"
+    },
+    {
+      "detail": "",
+      "id": "RPC-001",
+      "ms": 4,
+      "spec": "JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "Malformed JSON -> -32700 with id null",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-002",
+      "ms": 2,
+      "spec": "JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "Wrong structure -> -32600 with id null",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-003",
+      "ms": 136,
+      "spec": "JSON-RPC 2.0 s4",
+      "status": "pass",
+      "title": "Missing/incorrect jsonrpc member -> -32600, valid id echoed",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-004",
+      "ms": 47,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Empty batch -> single -32600 object",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-005",
+      "ms": 43,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Batch of non-requests -> array of -32600, one per element",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-006",
+      "ms": 228,
+      "spec": "JSON-RPC 2.0 s4; MCP basic",
+      "status": "pass",
+      "title": "id must be string/integer: bool, float, null, array rejected with id null",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-007",
+      "ms": 223,
+      "spec": "JSON-RPC 2.0 s5",
+      "status": "pass",
+      "title": "ids echoed verbatim (unicode string, huge int, negative, empty string)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-008",
+      "ms": 7,
+      "spec": "JSON-RPC 2.0 s4.1",
+      "status": "pass",
+      "title": "Notification (no id) yields no response",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-009",
+      "ms": 48,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Batch: one response per request, none for notifications",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-010",
+      "ms": 3,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Batch of only notifications yields no response",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-011",
+      "ms": 44,
+      "spec": "JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "Unknown method -> -32601 (after initialize)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-012",
+      "ms": 91,
+      "spec": "JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "params of wrong type -> -32602 / -32600",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-013",
+      "ms": 47,
+      "spec": "JSON-RPC 2.0 s5.1 / RFC 8259",
+      "status": "pass",
+      "title": "Non-standard JSON constants (NaN) -> -32700",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-014",
+      "ms": 88,
+      "spec": "JSON-RPC 2.0 s5.1 / RFC 8259 s8.1",
+      "status": "pass",
+      "title": "Invalid UTF-8 -> -32700 and server survives",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RPC-015",
+      "ms": 95,
+      "spec": "robustness",
+      "status": "pass",
+      "title": "Deeply nested JSON does not crash the server (-32700)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-001",
+      "ms": 267,
+      "spec": "MCP lifecycle: initialization",
+      "status": "pass",
+      "title": "Requests before initialize are rejected (tools, resources, prompts)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-002",
+      "ms": 1,
+      "spec": "MCP utilities: ping",
+      "status": "pass",
+      "title": "ping is allowed before initialize",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-003",
+      "ms": 42,
+      "spec": "MCP lifecycle",
+      "status": "pass",
+      "title": "Notifications before initialize are ignored silently",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-004",
+      "ms": 8,
+      "spec": "MCP lifecycle: version negotiation",
+      "status": "pass",
+      "title": "initialize negotiates each supported protocolVersion (echo)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-005",
+      "ms": 3,
+      "spec": "MCP lifecycle: version negotiation",
+      "status": "pass",
+      "title": "Unsupported protocolVersion -> server answers with 2025-03-26",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-006",
+      "ms": 3,
+      "spec": "MCP lifecycle: capability negotiation",
+      "status": "pass",
+      "title": "initialize result: serverInfo + capabilities for tools/resources/prompts",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-007",
+      "ms": 92,
+      "spec": "MCP lifecycle; JSON-RPC 2.0 s5.1",
+      "status": "pass",
+      "title": "initialize with invalid params -> -32602",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-008",
+      "ms": 47,
+      "spec": "MCP lifecycle",
+      "status": "pass",
+      "title": "Second initialize on the same session is rejected",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-009",
+      "ms": 44,
+      "spec": "MCP 2025-03-26 basic: batching rules",
+      "status": "pass",
+      "title": "initialize inside a batch is rejected",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "LIF-010",
+      "ms": 91,
+      "spec": "MCP changelog 2025-06-18 (batching removed)",
+      "status": "pass",
+      "title": "Batching allowed on 2025-03-26, rejected on negotiated 2025-06-18",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "TLS-001",
+      "ms": 48,
+      "spec": "MCP server/tools: listing",
+      "status": "pass",
+      "title": "tools/list returns strict object schemas (additionalProperties:false)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "TLS-002",
+      "ms": 135,
+      "spec": "MCP server/tools: error handling",
+      "status": "pass",
+      "title": "Unknown tool -> -32602; missing name -> -32602",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "TLS-003",
+      "ms": 400,
+      "spec": "MCP server/tools: tool execution errors",
+      "status": "pass",
+      "title": "Schema violations are tool errors (isError:true), not protocol errors",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "TLS-004",
+      "ms": 91,
+      "spec": "MCP server/tools: calling",
+      "status": "pass",
+      "title": "memory_store -> memory_recall round trip (case/accent-insensitive)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "TLS-005",
+      "ms": 183,
+      "spec": "MCP server/tools",
+      "status": "pass",
+      "title": "memory_forget removes an entry; unknown id is a tool error",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "TLS-006",
+      "ms": 92,
+      "spec": "MCP 2025-06-18 server/tools: structured content",
+      "status": "pass",
+      "title": "structuredContent only on negotiated 2025-06-18",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "TLS-007",
+      "ms": 96,
+      "spec": "MCP utilities: pagination",
+      "status": "pass",
+      "title": "tools/list rejects an invalid cursor (-32602); accepts _meta",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RES-001",
+      "ms": 319,
+      "spec": "MCP server/resources: listing",
+      "status": "pass",
+      "title": "resources/list exposes memory://index and audit://chain",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RES-002",
+      "ms": 52,
+      "spec": "MCP server/resources: reading",
+      "status": "pass",
+      "title": "resources/read memory://index returns JSON contents",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RES-003",
+      "ms": 47,
+      "spec": "MCP server/resources: templates",
+      "status": "pass",
+      "title": "resources/templates/list includes memory://entry/{id}",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RES-004",
+      "ms": 136,
+      "spec": "MCP server/resources",
+      "status": "pass",
+      "title": "Read of a stored entry via template URI",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RES-005",
+      "ms": 179,
+      "spec": "MCP server/resources: error handling",
+      "status": "pass",
+      "title": "Unknown resource -> -32002; missing uri -> -32602",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RES-006",
+      "ms": 104,
+      "spec": "formal-verification hooks",
+      "status": "pass",
+      "title": "audit://chain reports a valid chain and zero contract violations",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "PRM-001",
+      "ms": 48,
+      "spec": "MCP server/prompts: listing",
+      "status": "pass",
+      "title": "prompts/list declares arguments",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "PRM-002",
+      "ms": 95,
+      "spec": "MCP server/prompts: getting",
+      "status": "pass",
+      "title": "prompts/get embeds recalled memories as user message",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "PRM-003",
+      "ms": 268,
+      "spec": "MCP server/prompts: error handling",
+      "status": "pass",
+      "title": "prompts/get validates arguments (-32602)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-001",
+      "ms": 1,
+      "spec": "RFC 6750 s3 (simplified)",
+      "status": "pass",
+      "title": "Missing token rejected",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-002",
+      "ms": 1,
+      "spec": "RFC 7519 s4.1.4",
+      "status": "pass",
+      "title": "Expired token rejected (exp)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-003",
+      "ms": 1,
+      "spec": "RFC 7515 s5.2",
+      "status": "pass",
+      "title": "Tampered signature rejected (constant-time HMAC compare)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-004",
+      "ms": 1,
+      "spec": "RFC 7519 s4.1.3",
+      "status": "pass",
+      "title": "Wrong audience rejected (aud)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-005",
+      "ms": 0,
+      "spec": "RFC 7519 s4.1.1",
+      "status": "pass",
+      "title": "Wrong issuer rejected (iss)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-006",
+      "ms": 4,
+      "spec": "RFC 8725 s3.1",
+      "status": "pass",
+      "title": "alg=none and garbage tokens rejected",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-007",
+      "ms": 236,
+      "spec": "scope claims",
+      "status": "pass",
+      "title": "Per-tool scope enforced (-32003): read-only token cannot store/forget",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-008",
+      "ms": 1,
+      "spec": "scope claims",
+      "status": "pass",
+      "title": "Token lacking base 'mcp' scope rejected at initialize",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUT-009",
+      "ms": 160,
+      "spec": "OIDC Discovery 1.0 s3 (simplified); RFC 6749 s4.4",
+      "status": "pass",
+      "title": "Mock issuer: discovery document + client_credentials token works end to end",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-001",
+      "ms": 130,
+      "spec": "MCP 2025-03-26 transports: Streamable HTTP",
+      "status": "pass",
+      "title": "GET /mcp: needs Accept: text/event-stream (406) and a known session (400/404)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-002",
+      "ms": 3,
+      "spec": "MCP 2025-03-26 transports",
+      "status": "pass",
+      "title": "Notification-only POST -> 202 Accepted, empty body",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-003",
+      "ms": 188,
+      "spec": "MCP 2025-03-26 transports: session management",
+      "status": "pass",
+      "title": "Mcp-Session-Id issued at initialize, required afterwards, 404 when unknown, DELETE ends it",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-004",
+      "ms": 43,
+      "spec": "HTTP semantics",
+      "status": "pass",
+      "title": "Wrong Content-Type -> 415; Accept without JSON -> 406",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-005",
+      "ms": 113,
+      "spec": "security design",
+      "status": "pass",
+      "title": "Session bound to subject: another token cannot reuse the session id",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-006",
+      "ms": 43,
+      "spec": "MCP transports: security warning",
+      "status": "pass",
+      "title": "Foreign Origin header rejected (DNS-rebinding defence)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-007",
+      "ms": 2,
+      "spec": "robustness",
+      "status": "pass",
+      "title": "Oversized body -> 413",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-008",
+      "ms": 0,
+      "spec": "MCP 2025-06-18 transports: protocol version header",
+      "status": "pass",
+      "title": "Unsupported MCP-Protocol-Version header -> 400",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-009",
+      "ms": 44,
+      "spec": "JSON-RPC 2.0 s6",
+      "status": "pass",
+      "title": "Batch over HTTP returns a JSON array (application/json)",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "HTP-010",
+      "ms": 48,
+      "spec": "JSON-RPC 2.0 over HTTP",
+      "status": "pass",
+      "title": "Parse error over HTTP -> 400 with JSON-RPC body",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "FUZ-001",
+      "ms": 9092,
+      "spec": "property-based robustness",
+      "status": "pass",
+      "title": "Seeded fuzz (200 cases): never crashes, valid JSON-RPC, no -32603, ids echoed",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "AUD-001",
+      "ms": 453,
+      "spec": "hash-chained audit",
+      "status": "pass",
+      "title": "Audit log chain verifies via CLI; flipping one byte is detected; truncation caught with anchor",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "PAG-001",
+      "ms": 362,
+      "spec": "MCP utilities: pagination",
+      "status": "pass",
+      "title": "resources/list paginates: >1 page, no duplicates, sorted, every page <= 25",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "PAG-002",
+      "ms": 1299,
+      "spec": "MCP utilities: pagination",
+      "status": "pass",
+      "title": "Invalid / foreign / non-string cursors -> -32602 on all four list methods",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "PAG-003",
+      "ms": 136,
+      "spec": "MCP utilities: pagination",
+      "status": "pass",
+      "title": "Short lists (tools, prompts, templates) fit one page and walk cleanly",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RSX-001",
+      "ms": 180,
+      "spec": "MCP server/resources: static content",
+      "status": "pass",
+      "title": "Static resources: stable bytes across reads, correct mime types",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RSX-002",
+      "ms": 608,
+      "spec": "MCP server/resources: templates",
+      "status": "pass",
+      "title": "Templated resources resolve (country/element/unit/glossary); unknown -> -32002 with uri echoed",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RSX-003",
+      "ms": 240,
+      "spec": "MCP server/resources: dynamic content",
+      "status": "pass",
+      "title": "Dynamic resources: dyn://counter changes with counter_bump; dyn://clock differs between reads",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RSX-004",
+      "ms": 499,
+      "spec": "MCP server/resources: binary content",
+      "status": "pass",
+      "title": "Binary resources: valid base64, matches listed size/mime, PNG signature, independent SHA-256 via tool",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "RSX-005",
+      "ms": 7843,
+      "spec": "MCP server/resources: list/read consistency",
+      "status": "pass",
+      "title": "Every listed resource is readable and has exactly one of text/blob",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "SUB-001",
+      "ms": 446,
+      "spec": "MCP server/resources: capabilities",
+      "status": "pass",
+      "title": "Capabilities are honest: subscribe/listChanged advertised => subscribe works and notifications really arrive",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "SUB-002",
+      "ms": 1513,
+      "spec": "MCP server/resources: subscriptions",
+      "status": "pass",
+      "title": "updated only for subscribers; none after unsubscribe; other sessions unaffected",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "SUB-003",
+      "ms": 264,
+      "spec": "MCP server/resources: subscriptions",
+      "status": "pass",
+      "title": "subscribe validates: unknown -> -32002, non-canonical -> -32602 (with canonical hint), bad params -> -32602",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "SUB-004",
+      "ms": 1262,
+      "spec": "MCP server/resources: notifications",
+      "status": "pass",
+      "title": "glossary_add: new term -> list_changed; replace -> updated(term) without list_changed; remove -> list_changed",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "SUB-005",
+      "ms": 51,
+      "spec": "MCP 2025-03-26 transports",
+      "status": "pass",
+      "title": "HTTP: the SSE stream ends when the session is DELETEd",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "CMP-001",
+      "ms": 178,
+      "spec": "MCP utilities: completion",
+      "status": "pass",
+      "title": "completion/complete: prompt arguments, context, result shape, 100-value cap",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "CMP-002",
+      "ms": 271,
+      "spec": "MCP utilities: completion",
+      "status": "pass",
+      "title": "completion/complete for resource templates; invalid refs -> -32602",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "PRM-004",
+      "ms": 88,
+      "spec": "MCP server/prompts: embedded resources",
+      "status": "pass",
+      "title": "Multi-message prompts: roles alternate sensibly; resources and an image are embedded",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "PRM-005",
+      "ms": 311,
+      "spec": "MCP server/prompts: argument validation",
+      "status": "pass",
+      "title": "Prompt argument validation: unknown country/enum/extra/missing -> -32602 with an errors list",
+      "transport": "http"
+    },
+    {
+      "detail": "",
+      "id": "TLS-008",
+      "ms": 180,
+      "spec": "MCP server/tools",
+      "status": "pass",
+      "title": "Dataset tools: structured results, resource_link only on 2025-06-18, domain errors are isError",
+      "transport": "http"
+    }
+  ],
+  "server_version": "1.0.0",
+  "started_unix": 1792036234,
+  "suite": "mcp-resource-heavy conformance",
+  "summary": {
+    "failed": 0,
+    "passed": 154,
+    "total": 154
+  }
+}

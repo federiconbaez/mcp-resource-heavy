@@ -1,0 +1,159 @@
+ID       TRANSP RES   TITLE
+RPC-001  stdio  PASS  Malformed JSON -> -32700 with id null
+RPC-002  stdio  PASS  Wrong structure -> -32600 with id null
+RPC-003  stdio  PASS  Missing/incorrect jsonrpc member -> -32600, valid id echoed
+RPC-004  stdio  PASS  Empty batch -> single -32600 object
+RPC-005  stdio  PASS  Batch of non-requests -> array of -32600, one per element
+RPC-006  stdio  PASS  id must be string/integer: bool, float, null, array rejected with id null
+RPC-007  stdio  PASS  ids echoed verbatim (unicode string, huge int, negative, empty string)
+RPC-008  stdio  PASS  Notification (no id) yields no response
+RPC-009  stdio  PASS  Batch: one response per request, none for notifications
+RPC-010  stdio  PASS  Batch of only notifications yields no response
+RPC-011  stdio  PASS  Unknown method -> -32601 (after initialize)
+RPC-012  stdio  PASS  params of wrong type -> -32602 / -32600
+RPC-013  stdio  PASS  Non-standard JSON constants (NaN) -> -32700
+RPC-014  stdio  PASS  Invalid UTF-8 -> -32700 and server survives
+RPC-015  stdio  PASS  Deeply nested JSON does not crash the server (-32700)
+LIF-001  stdio  PASS  Requests before initialize are rejected (tools, resources, prompts)
+LIF-002  stdio  PASS  ping is allowed before initialize
+LIF-003  stdio  PASS  Notifications before initialize are ignored silently
+LIF-004  stdio  PASS  initialize negotiates each supported protocolVersion (echo)
+LIF-005  stdio  PASS  Unsupported protocolVersion -> server answers with 2025-03-26
+LIF-006  stdio  PASS  initialize result: serverInfo + capabilities for tools/resources/prompts
+LIF-007  stdio  PASS  initialize with invalid params -> -32602
+LIF-008  stdio  PASS  Second initialize on the same session is rejected
+LIF-009  stdio  PASS  initialize inside a batch is rejected
+LIF-010  stdio  PASS  Batching allowed on 2025-03-26, rejected on negotiated 2025-06-18
+TLS-001  stdio  PASS  tools/list returns strict object schemas (additionalProperties:false)
+TLS-002  stdio  PASS  Unknown tool -> -32602; missing name -> -32602
+TLS-003  stdio  PASS  Schema violations are tool errors (isError:true), not protocol errors
+TLS-004  stdio  PASS  memory_store -> memory_recall round trip (case/accent-insensitive)
+TLS-005  stdio  PASS  memory_forget removes an entry; unknown id is a tool error
+TLS-006  stdio  PASS  structuredContent only on negotiated 2025-06-18
+TLS-007  stdio  PASS  tools/list rejects an invalid cursor (-32602); accepts _meta
+RES-001  stdio  PASS  resources/list exposes memory://index and audit://chain
+RES-002  stdio  PASS  resources/read memory://index returns JSON contents
+RES-003  stdio  PASS  resources/templates/list includes memory://entry/{id}
+RES-004  stdio  PASS  Read of a stored entry via template URI
+RES-005  stdio  PASS  Unknown resource -> -32002; missing uri -> -32602
+RES-006  stdio  PASS  audit://chain reports a valid chain and zero contract violations
+PRM-001  stdio  PASS  prompts/list declares arguments
+PRM-002  stdio  PASS  prompts/get embeds recalled memories as user message
+PRM-003  stdio  PASS  prompts/get validates arguments (-32602)
+AUT-001  stdio  PASS  Missing token rejected
+AUT-002  stdio  PASS  Expired token rejected (exp)
+AUT-003  stdio  PASS  Tampered signature rejected (constant-time HMAC compare)
+AUT-004  stdio  PASS  Wrong audience rejected (aud)
+AUT-005  stdio  PASS  Wrong issuer rejected (iss)
+AUT-006  stdio  PASS  alg=none and garbage tokens rejected
+AUT-007  stdio  PASS  Per-tool scope enforced (-32003): read-only token cannot store/forget
+AUT-008  stdio  PASS  Token lacking base 'mcp' scope rejected at initialize
+AUT-010  stdio  PASS  --no-auth is an explicit opt-in and then needs no token
+STD-001  stdio  PASS  Memory persists across server restarts (new process, same data dir)
+STD-002  stdio  PASS  CRLF frames accepted, blank lines ignored, stdout carries only JSON
+STD-003  stdio  PASS  Oversized line (>1 MiB) -> -32600 and the server keeps serving
+STD-004  stdio  PASS  Server exits cleanly (0) on stdin EOF
+FUZ-001  stdio  PASS  Seeded fuzz (200 cases): never crashes, valid JSON-RPC, no -32603, ids echoed
+AUD-001  stdio  PASS  Audit log chain verifies via CLI; flipping one byte is detected; truncation caught with anchor
+PAG-001  stdio  PASS  resources/list paginates: >1 page, no duplicates, sorted, every page <= 25
+PAG-002  stdio  PASS  Invalid / foreign / non-string cursors -> -32602 on all four list methods
+PAG-003  stdio  PASS  Short lists (tools, prompts, templates) fit one page and walk cleanly
+RSX-001  stdio  PASS  Static resources: stable bytes across reads, correct mime types
+RSX-002  stdio  PASS  Templated resources resolve (country/element/unit/glossary); unknown -> -32002 with uri echoed
+RSX-003  stdio  PASS  Dynamic resources: dyn://counter changes with counter_bump; dyn://clock differs between reads
+RSX-004  stdio  PASS  Binary resources: valid base64, matches listed size/mime, PNG signature, independent SHA-256 via tool
+RSX-005  stdio  PASS  Every listed resource is readable and has exactly one of text/blob
+SUB-001  stdio  PASS  Capabilities are honest: subscribe/listChanged advertised => subscribe works and notifications really arrive
+SUB-002  stdio  PASS  updated only for subscribers; none after unsubscribe; other sessions unaffected
+SUB-003  stdio  PASS  subscribe validates: unknown -> -32002, non-canonical -> -32602 (with canonical hint), bad params -> -32602
+SUB-004  stdio  PASS  glossary_add: new term -> list_changed; replace -> updated(term) without list_changed; remove -> list_changed
+SUB-006  stdio  PASS  stdio: the notification is written right after the response that caused it
+CMP-001  stdio  PASS  completion/complete: prompt arguments, context, result shape, 100-value cap
+CMP-002  stdio  PASS  completion/complete for resource templates; invalid refs -> -32602
+PRM-004  stdio  PASS  Multi-message prompts: roles alternate sensibly; resources and an image are embedded
+PRM-005  stdio  PASS  Prompt argument validation: unknown country/enum/extra/missing -> -32602 with an errors list
+TLS-008  stdio  PASS  Dataset tools: structured results, resource_link only on 2025-06-18, domain errors are isError
+RPC-001  http   PASS  Malformed JSON -> -32700 with id null
+RPC-002  http   PASS  Wrong structure -> -32600 with id null
+RPC-003  http   PASS  Missing/incorrect jsonrpc member -> -32600, valid id echoed
+RPC-004  http   PASS  Empty batch -> single -32600 object
+RPC-005  http   PASS  Batch of non-requests -> array of -32600, one per element
+RPC-006  http   PASS  id must be string/integer: bool, float, null, array rejected with id null
+RPC-007  http   PASS  ids echoed verbatim (unicode string, huge int, negative, empty string)
+RPC-008  http   PASS  Notification (no id) yields no response
+RPC-009  http   PASS  Batch: one response per request, none for notifications
+RPC-010  http   PASS  Batch of only notifications yields no response
+RPC-011  http   PASS  Unknown method -> -32601 (after initialize)
+RPC-012  http   PASS  params of wrong type -> -32602 / -32600
+RPC-013  http   PASS  Non-standard JSON constants (NaN) -> -32700
+RPC-014  http   PASS  Invalid UTF-8 -> -32700 and server survives
+RPC-015  http   PASS  Deeply nested JSON does not crash the server (-32700)
+LIF-001  http   PASS  Requests before initialize are rejected (tools, resources, prompts)
+LIF-002  http   PASS  ping is allowed before initialize
+LIF-003  http   PASS  Notifications before initialize are ignored silently
+LIF-004  http   PASS  initialize negotiates each supported protocolVersion (echo)
+LIF-005  http   PASS  Unsupported protocolVersion -> server answers with 2025-03-26
+LIF-006  http   PASS  initialize result: serverInfo + capabilities for tools/resources/prompts
+LIF-007  http   PASS  initialize with invalid params -> -32602
+LIF-008  http   PASS  Second initialize on the same session is rejected
+LIF-009  http   PASS  initialize inside a batch is rejected
+LIF-010  http   PASS  Batching allowed on 2025-03-26, rejected on negotiated 2025-06-18
+TLS-001  http   PASS  tools/list returns strict object schemas (additionalProperties:false)
+TLS-002  http   PASS  Unknown tool -> -32602; missing name -> -32602
+TLS-003  http   PASS  Schema violations are tool errors (isError:true), not protocol errors
+TLS-004  http   PASS  memory_store -> memory_recall round trip (case/accent-insensitive)
+TLS-005  http   PASS  memory_forget removes an entry; unknown id is a tool error
+TLS-006  http   PASS  structuredContent only on negotiated 2025-06-18
+TLS-007  http   PASS  tools/list rejects an invalid cursor (-32602); accepts _meta
+RES-001  http   PASS  resources/list exposes memory://index and audit://chain
+RES-002  http   PASS  resources/read memory://index returns JSON contents
+RES-003  http   PASS  resources/templates/list includes memory://entry/{id}
+RES-004  http   PASS  Read of a stored entry via template URI
+RES-005  http   PASS  Unknown resource -> -32002; missing uri -> -32602
+RES-006  http   PASS  audit://chain reports a valid chain and zero contract violations
+PRM-001  http   PASS  prompts/list declares arguments
+PRM-002  http   PASS  prompts/get embeds recalled memories as user message
+PRM-003  http   PASS  prompts/get validates arguments (-32602)
+AUT-001  http   PASS  Missing token rejected
+AUT-002  http   PASS  Expired token rejected (exp)
+AUT-003  http   PASS  Tampered signature rejected (constant-time HMAC compare)
+AUT-004  http   PASS  Wrong audience rejected (aud)
+AUT-005  http   PASS  Wrong issuer rejected (iss)
+AUT-006  http   PASS  alg=none and garbage tokens rejected
+AUT-007  http   PASS  Per-tool scope enforced (-32003): read-only token cannot store/forget
+AUT-008  http   PASS  Token lacking base 'mcp' scope rejected at initialize
+AUT-009  http   PASS  Mock issuer: discovery document + client_credentials token works end to end
+HTP-001  http   PASS  GET /mcp: needs Accept: text/event-stream (406) and a known session (400/404)
+HTP-002  http   PASS  Notification-only POST -> 202 Accepted, empty body
+HTP-003  http   PASS  Mcp-Session-Id issued at initialize, required afterwards, 404 when unknown, DELETE ends it
+HTP-004  http   PASS  Wrong Content-Type -> 415; Accept without JSON -> 406
+HTP-005  http   PASS  Session bound to subject: another token cannot reuse the session id
+HTP-006  http   PASS  Foreign Origin header rejected (DNS-rebinding defence)
+HTP-007  http   PASS  Oversized body -> 413
+HTP-008  http   PASS  Unsupported MCP-Protocol-Version header -> 400
+HTP-009  http   PASS  Batch over HTTP returns a JSON array (application/json)
+HTP-010  http   PASS  Parse error over HTTP -> 400 with JSON-RPC body
+FUZ-001  http   PASS  Seeded fuzz (200 cases): never crashes, valid JSON-RPC, no -32603, ids echoed
+AUD-001  http   PASS  Audit log chain verifies via CLI; flipping one byte is detected; truncation caught with anchor
+PAG-001  http   PASS  resources/list paginates: >1 page, no duplicates, sorted, every page <= 25
+PAG-002  http   PASS  Invalid / foreign / non-string cursors -> -32602 on all four list methods
+PAG-003  http   PASS  Short lists (tools, prompts, templates) fit one page and walk cleanly
+RSX-001  http   PASS  Static resources: stable bytes across reads, correct mime types
+RSX-002  http   PASS  Templated resources resolve (country/element/unit/glossary); unknown -> -32002 with uri echoed
+RSX-003  http   PASS  Dynamic resources: dyn://counter changes with counter_bump; dyn://clock differs between reads
+RSX-004  http   PASS  Binary resources: valid base64, matches listed size/mime, PNG signature, independent SHA-256 via tool
+RSX-005  http   PASS  Every listed resource is readable and has exactly one of text/blob
+SUB-001  http   PASS  Capabilities are honest: subscribe/listChanged advertised => subscribe works and notifications really arrive
+SUB-002  http   PASS  updated only for subscribers; none after unsubscribe; other sessions unaffected
+SUB-003  http   PASS  subscribe validates: unknown -> -32002, non-canonical -> -32602 (with canonical hint), bad params -> -32602
+SUB-004  http   PASS  glossary_add: new term -> list_changed; replace -> updated(term) without list_changed; remove -> list_changed
+SUB-005  http   PASS  HTTP: the SSE stream ends when the session is DELETEd
+CMP-001  http   PASS  completion/complete: prompt arguments, context, result shape, 100-value cap
+CMP-002  http   PASS  completion/complete for resource templates; invalid refs -> -32602
+PRM-004  http   PASS  Multi-message prompts: roles alternate sensibly; resources and an image are embedded
+PRM-005  http   PASS  Prompt argument validation: unknown country/enum/extra/missing -> -32602 with an errors list
+TLS-008  http   PASS  Dataset tools: structured results, resource_link only on 2025-06-18, domain errors are isError
+final[stdio]: chain_ok=True entries=4262 contract_checks=21 violations=0
+final[http]: chain_ok=True entries=4269 contract_checks=4560 violations=0
+CONFORMANCE: 154/154 checks passed, 0 failed (38.3s)
+JSON report written to evidence/conformance_report.json

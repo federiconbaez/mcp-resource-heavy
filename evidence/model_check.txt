@@ -1,0 +1,2 @@
+SUBSCRIPTION MODEL CHECK  alphabet=13  depth=6  sequences=4826809  nodes=5229042  violations=0  (195.0s)
+RESULT: PASS

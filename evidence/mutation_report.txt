@@ -1,0 +1,28 @@
+M01 ignore token expiry                              KILLED    FAIL: test_expired (tests.test_auth.AuthTests.test_expired)
+M02 ignore audience                                  KILLED    FAIL: test_audience_list (tests.test_auth.AuthTests.test_audience_list)
+M03 skip signature check                             KILLED    FAIL: test_bad_signature (tests.test_auth.AuthTests.test_bad_signature)
+M04 accept any JWT alg                               KILLED    FAIL: test_alg_none_and_other_algs (tests.test_auth.AuthTests.test_alg_none_and_other_algs)
+M05 ignore issuer                                    KILLED    FAIL: test_missing_required_claims (tests.test_auth.AuthTests.test_missing_required_claims)
+M06 no per-method scope enforcement                  KILLED    ERROR: test_error_data_names_required_scope (tests.test_protocol.ScopeEnforcementTests.test_error_data_names_r
+M07 allow requests before initialize                 KILLED    FAIL: test_all_sequences_up_to_length_5 (tests.test_protocol.LifecycleModelCheck.test_all_sequences_up_to_leng
+M08 always negotiate preferred version               KILLED    ERROR: test_batching_depends_on_negotiated_version (tests.test_protocol.LifecycleTests.test_batching_depends_o
+M09 audit: ignore prev-link                          KILLED    FAIL: test_recomputed_hash_forgery_breaks_next_link (tests.test_persistence_audit.AuditTests.test_recomputed_h
+M10 audit: ignore entry hash                         KILLED    FAIL: test_modified_payload_detected (tests.test_persistence_audit.AuditTests.test_modified_payload_detected)
+M11 booleans accepted as ids                         KILLED    FAIL: test_invalid_request_echoes_valid_id_only (tests.test_jsonrpc.JsonRpcTests.test_invalid_request_echoes_v
+M12 respond to notifications (contracts off)         KILLED    FAIL: test_audit_resource_reports_chain_and_contracts (tests.test_protocol.ToolsResourcesPromptsTests.test_aud
+M13 memory not persistent                            KILLED    FAIL: test_read_only_scope (tests.test_protocol.ScopeEnforcementTests.test_read_only_scope)
+M14 schema ignores additionalProperties:false        KILLED    FAIL: test_required_and_additional (tests.test_schema.SchemaTests.test_required_and_additional)
+M15 schema treats bool as integer                    KILLED    FAIL: test_types (tests.test_schema.SchemaTests.test_types)
+M16 HTTP session not bound to subject (POST path)    KILLED    FAIL: test_session_not_shared_between_subjects (tests.test_http_e2e.HttpE2E.test_session_not_shared_between_su
+M16b SSE stream not bound to subject                 KILLED    FAIL: test_stream_rules (tests.test_subscriptions.HttpSse.test_stream_rules)
+M17 batch always answers (even all-notification)     KILLED    FAIL: test_batch_rules (tests.test_jsonrpc.JsonRpcTests.test_batch_rules)
+M19 cursor list-kind not checked                     KILLED    ERROR: test_cursor_from_another_list_or_garbage_is_invalid_params (tests.test_paging.PagingOverMcp.test_cursor
+M20 keyset pagination repeats the cursor item        KILLED    FAIL: test_each_list_pages_completely (tests.test_paging.PagingOverMcp.test_each_list_pages_completely)
+M21 outbox does not coalesce duplicates              KILLED    ERROR: test_store_recall_list_forget_flow (tests.test_protocol.ToolsResourcesPromptsTests.test_store_recall_li
+M22 unsubscribe keeps the subscription               KILLED    FAIL: test_unsubscribe_drops_pending (tests.test_subscriptions.HubUnit.test_unsubscribe_drops_pending)
+M23 subscription bound not enforced                  KILLED    FAIL: test_subscription_bound (tests.test_subscriptions.HubUnit.test_subscription_bound)
+M24 non-subscribers get notified                     KILLED    ERROR: test_resources (tests.test_protocol.ToolsResourcesPromptsTests.test_resources)
+M25 capability subscribe advertised false            KILLED    FAIL: test_all_sequences_up_to_length_5 (tests.test_protocol.LifecycleModelCheck.test_all_sequences_up_to_leng
+M18 id not echoed (wrong id in results)              KILLED    FAIL: test_contracts_run_and_pass_on_good_traffic (tests.test_jsonrpc.ContractTests.test_contracts_run_and_pas
+
+mutants killed: 26/26

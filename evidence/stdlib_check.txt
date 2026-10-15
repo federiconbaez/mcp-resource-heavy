@@ -1,0 +1,70 @@
+STDLIB-ONLY CHECK (ast-based; nothing was imported or executed)
+python 3.13.5, 290 stdlib modules known to this interpreter
+
+file                                 code  total  imports (stdlib/local)
+demo.py                               295    352  base64,hashlib,http,json,os,shutil,signal,socket,subprocess,sys,tempfile,threading,time,urllib
+mcpres/__init__.py                      6     11  
+mcpres/__main__.py                      3      5  sys  | local: .cli
+mcpres/audit.py                       132    153  fcntl,hashlib,json,os,threading,time
+mcpres/auth.py                        222    264  base64,binascii,hashlib,hmac,json,math,os,re,secrets,time
+mcpres/catalog.py                     244    279  base64,hashlib,json,sqlite3,urllib  | local: .,.llm,.memory,.prompts,.resources,.userdata
+mcpres/cli.py                         142    174  argparse,json,os,signal,sys,threading  | local: .,.audit,.auth,.conformance,.llm,.server,.transport_http,.transport_stdio
+mcpres/conformance.py                1064   1344  base64,hashlib,http,json,os,queue,shutil,socket,subprocess,sys,tempfile,threading,time,urllib  | local: .,.audit
+mcpres/contracts.py                    73    100  functools,os,threading
+mcpres/datasets.py                    201    238  hashlib,struct,zlib
+mcpres/fuzz.py                        164    193  json,random
+mcpres/hub.py                         130    168  collections,threading  | local: .
+mcpres/jsonrpc.py                     208    255  collections,json  | local: .
+mcpres/llm.py                          44     52  json,os,urllib
+mcpres/memory.py                      127    152  contextlib,json,os,re,sqlite3,time,unicodedata
+mcpres/modelcheck.py                  151    175  copy  | local: .contracts,.hub
+mcpres/paging.py                       47     59  base64,binascii,json
+mcpres/prompts.py                     277    321  base64,json,random  | local: .,.memory,.resources,.userdata
+mcpres/resources.py                   185    207  base64,datetime,json,re,time,urllib  | local: .,.userdata
+mcpres/schema.py                      204    241  re
+mcpres/server.py                      392    445  json,os,secrets,threading,time,urllib  | local: .,.audit,.auth,.catalog,.hub,.jsonrpc,.memory,.paging,.prompts,.resources,.userdata
+mcpres/transport_http.py              310    354  http,json,socket,sys,threading,time,urllib  | local: .,.auth,.jsonrpc
+mcpres/transport_stdio.py              45     54  sys  | local: .jsonrpc
+mcpres/userdata.py                     80     99  contextlib,os,sqlite3,threading,time  | local: .
+tests/__init__.py                       0      0  
+tests/helpers.py                       90    122  json,os,shutil,subprocess,sys,tempfile,threading,unittest  | local: mcpres.auth,mcpres.server,mcpres.transport_http
+tests/test_auth.py                    154    192  base64,inspect,json,os,tempfile,unittest  | local: mcpres,mcpres.auth,tests
+tests/test_datasets.py                 95    109  base64,struct,unittest,zlib  | local: mcpres
+tests/test_fuzz.py                     99    112  json,random,unittest  | local: mcpres,mcpres.auth,tests,tests.helpers
+tests/test_http_e2e.py                218    249  base64,http,json,os,subprocess,sys,unittest,urllib  | local: mcpres.auth,tests,tests.helpers
+tests/test_jsonrpc.py                 129    158  json,unittest  | local: mcpres,mcpres.jsonrpc,tests
+tests/test_llm_and_tools.py           123    142  http,json,os,shutil,subprocess,sys,tempfile,threading,unittest  | local: mcpres.llm,tests,tests.helpers
+tests/test_paging.py                  109    127  json,unittest  | local: mcpres,tests.helpers
+tests/test_persistence_audit.py       180    208  json,os,threading,unittest  | local: mcpres.audit,mcpres.memory,tests,tests.helpers
+tests/test_prompts_completion.py      159    187  base64,json,unittest  | local: mcpres,tests.helpers
+tests/test_protocol.py                286    330  itertools,json,os,unittest  | local: mcpres.auth,tests,tests.helpers
+tests/test_resources.py               213    246  base64,hashlib,json,unittest  | local: mcpres,tests.helpers
+tests/test_schema.py                   87    102  tempfile,unittest  | local: mcpres,mcpres.catalog,mcpres.memory,mcpres.prompts,mcpres.resources,mcpres.userdata,tests
+tests/test_stdio_e2e.py                72     84  json,unittest  | local: tests,tests.helpers
+tests/test_subscriptions.py           410    461  http,json,threading,time,unittest  | local: mcpres,mcpres.hub,mcpres.transport_http,tests,tests.helpers
+tools/adaptation_report.py             47     58  difflib,os,sys
+tools/check_doc_refs.py                51     59  glob,os,re,sys
+tools/check_stdlib_only.py            142    161  argparse,ast,json,os,subprocess,sys
+tools/gen_originality.py               72     88  hashlib,os,re,subprocess,sys
+tools/make_manifest.py                 60     73  argparse,hashlib,os,sys
+tools/model_check.py                   28     34  argparse,json,os,sys,time  | local: mcpres
+tools/mutation_sanity.py               78     91  argparse,concurrent,os,shutil,subprocess,sys,tempfile
+
+files: 47   lines: total=9088 code=7648 comment=107 blank=1333
+stdlib modules used (39): argparse, ast, base64, binascii, collections, concurrent, contextlib, copy, datetime, difflib, fcntl, functools, glob, hashlib, hmac, http, inspect, itertools, json, math, os, queue, random, re, secrets, shutil, signal, socket, sqlite3, struct, subprocess, sys, tempfile, threading, time, unicodedata, unittest, urllib, zlib
+
+GIT HISTORY (oldest first):
+cf481db|Grok Bot (mcp-family build)|2026-10-15T02:47:10Z|Import mcp-forge base (adapted: package renamed, project-specific audience/paths); variant work follows
+
+ 34 files changed, 5745 insertions(+)
+dacac24|Grok Bot (mcp-family build)|2026-10-15T03:28:57Z|Resource-heavy: datasets, resource space (static/templated/dynamic/binary), keyset pagination, subscription hub, SSE + stdio notifications, completion, rich prompts, dataset tools, model check, tests, conformance
+
+ 27 files changed, 3295 insertions(+), 249 deletions(-)
+c5ea90f|Grok Bot (mcp-family build)|2026-10-15T03:36:04Z|Resource-heavy: end-to-end demo (29 steps)
+
+ 1 file changed, 239 insertions(+), 129 deletions(-)
+a21a951|Grok Bot (mcp-family build)|2026-10-15T03:49:40Z|Resource-heavy: README/AUDIT/ORIGINALITY/SECURITY, mutation suite (27 mutants), evidence tooling
+
+ 11 files changed, 500 insertions(+), 16 deletions(-)
+
+RESULT: PASS - zero third-party imports, no dynamic imports/exec/eval, no dependency manifests

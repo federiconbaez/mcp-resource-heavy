@@ -1,0 +1,133 @@
+mcp-resource-heavy demo (Python 3.13.5)
+mcp-resource-heavy demo  |  python 3.13.5  |  workdir /tmp/mcpres-demo-4okzwqqo
+
+==============================================================================
+== 1. Token (HS256 simplified OIDC) and a stdio session
+==============================================================================
+$ python3 -m mcpres mint-token --data-dir /tmp/mcpres-demo-4okzwqqo/data --issuer http://127.0.0.1:54523 --sub demo-user
+   [ok] token minted with all scopes (mcp data:read data:write memory:* audit:read)
+   (server process started, pid 145275, transport=stdio)
+-> {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "demo-client", "version": "1.0"}}}
+<- {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-06-18", "capabilities": {"tools": {"listChanged": false}, "resources": {"subscribe": true, "listChanged": true}, "prompts": {"listChanged": false}, "experimental": {"mcpres/auditChain": {"algorith ...
+-> {"jsonrpc": "2.0", "method": "notifications/initialized"}   (notification, no reply expected)
+   [ok] capabilities: resources.subscribe/listChanged and completions advertised
+
+==============================================================================
+== 2. Cursor pagination over ~145 resources
+==============================================================================
+   145 resources in 6 pages of <= 25; schemes: audit, blob, country, data, dyn, element, glossary, memory, static, unit
+   [ok] every page walked, no duplicates, stable order
+-> {"jsonrpc": "2.0", "id": 8, "method": "resources/list", "params": {"cursor": "not-a-cursor"}}
+<- {"jsonrpc": "2.0", "id": 8, "error": {"code": -32602, "message": "Invalid cursor", "data": {"errors": ["cursor is not a cursor issued by this server"]}}}
+   [ok] invalid cursor -> -32602
+
+==============================================================================
+== 3. Static, templated, dynamic and binary resources
+==============================================================================
+-> {"jsonrpc": "2.0", "id": 9, "method": "resources/read", "params": {"uri": "static://about"}}
+<- {"jsonrpc": "2.0", "id": 9, "result": {"contents": [{"uri": "static://about", "mimeType": "text/markdown", "text": "# mcp-resource-heavy\n\nA stdlib-only MCP server whose point is *resources*: static documents, URI templates, dynamic values that change,\nbinar ...
+   [ok] static://about (text/markdown)
+-> {"jsonrpc": "2.0", "id": 10, "method": "resources/read", "params": {"uri": "country://AR"}}
+<- {"jsonrpc": "2.0", "id": 10, "result": {"contents": [{"uri": "country://AR", "mimeType": "application/json", "text": "{\n  \"area_thousand_km2\": 2780,\n  \"capital\": \"Buenos Aires\",\n  \"currency\": \"ARS\",\n  \"iso2\": \"AR\",\n  \"iso3\": \"ARG\",\n  \" ...
+   [ok] templated country://{iso2} -> Argentina, capital Buenos Aires (approximate dataset)
+-> {"jsonrpc": "2.0", "id": 11, "method": "resources/read", "params": {"uri": "element://Fe"}}
+<- {"jsonrpc": "2.0", "id": 11, "result": {"contents": [{"uri": "element://Fe", "mimeType": "application/json", "text": "{\n  \"atomic_mass\": 55.845,\n  \"category\": \"transition metal\",\n  \"group\": 8,\n  \"name\": \"Iron\",\n  \"number\": 26,\n  \"period\": ...
+   [ok] templated element://{symbol} -> Z=26
+-> {"jsonrpc": "2.0", "id": 12, "method": "resources/read", "params": {"uri": "country://ZZ"}}
+<- {"jsonrpc": "2.0", "id": 12, "error": {"code": -32002, "message": "Resource not found", "data": {"uri": "country://ZZ"}}}
+   [ok] unknown templated resource -> -32002
+-> {"jsonrpc": "2.0", "id": 13, "method": "resources/read", "params": {"uri": "dyn://counter"}}
+<- {"jsonrpc": "2.0", "id": 13, "result": {"contents": [{"uri": "dyn://counter", "mimeType": "application/json", "text": "{\n  \"bumps\": 0,\n  \"value\": 0\n}"}]}}
+-> {"jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": {"name": "counter_bump", "arguments": {"by": 5}}}
+<- {"jsonrpc": "2.0", "id": 14, "result": {"content": [{"type": "text", "text": "{\n  \"bumps\": 1,\n  \"value\": 5\n}"}, {"type": "resource_link", "uri": "dyn://counter", "name": "counter", "mimeType": "application/json"}], "isError": false, "structuredContent": ...
+-> {"jsonrpc": "2.0", "id": 15, "method": "resources/read", "params": {"uri": "dyn://counter"}}
+<- {"jsonrpc": "2.0", "id": 15, "result": {"contents": [{"uri": "dyn://counter", "mimeType": "application/json", "text": "{\n  \"bumps\": 1,\n  \"value\": 5\n}"}]}}
+   [ok] dynamic dyn://counter changed 0 -> 5 after counter_bump
+-> {"jsonrpc": "2.0", "id": 16, "method": "resources/read", "params": {"uri": "dyn://clock"}}
+<- {"jsonrpc": "2.0", "id": 16, "result": {"contents": [{"uri": "dyn://clock", "mimeType": "application/json", "text": "{\n  \"epoch\": 1792036272.82,\n  \"utc\": \"2026-10-15T03:51:12.819Z\"\n}"}]}}
+-> {"jsonrpc": "2.0", "id": 17, "method": "resources/read", "params": {"uri": "dyn://clock"}}
+<- {"jsonrpc": "2.0", "id": 17, "result": {"contents": [{"uri": "dyn://clock", "mimeType": "application/json", "text": "{\n  \"epoch\": 1792036272.841,\n  \"utc\": \"2026-10-15T03:51:12.840Z\"\n}"}]}}
+   [ok] dynamic dyn://clock differs between reads (2026-10-15T03:51:12.819Z < 2026-10-15T03:51:12.840Z)
+-> {"jsonrpc": "2.0", "id": 18, "method": "resources/read", "params": {"uri": "blob://sample.png"}}
+<- {"jsonrpc": "2.0", "id": 18, "result": {"contents": [{"uri": "blob://sample.png", "mimeType": "image/png", "blob": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAMK0lEQVR4AQEgDN/zAAAA/wgA/xAA/xgA/yAAACkAADEAADkAAEEA/0oA/1IA/1oA/2IAAGoAAHMAAHsAAIMA/4sA/5QA/5wA ...
+   [ok] binary blob://sample.png: 3172 bytes, PNG signature
+   [ok] server-side SHA-256 equals independent SHA-256 of the decoded blob
+
+==============================================================================
+== 4. completion/complete and a multi-message prompt with embedded resources
+==============================================================================
+-> {"jsonrpc": "2.0", "id": 20, "method": "completion/complete", "params": {"ref": {"type": "ref/prompt", "name": "country_briefing"}, "argument": {"name": "country", "value": "ar"}}}
+<- {"jsonrpc": "2.0", "id": 20, "result": {"completion": {"values": ["AR", "Argentina"], "total": 2, "hasMore": false}}}
+   [ok] completion for prompt argument 'country' = 'ar'
+-> {"jsonrpc": "2.0", "id": 21, "method": "completion/complete", "params": {"ref": {"type": "ref/resource", "uri": "element://{symbol}"}, "argument": {"name": "symbol", "value": "C"}}}
+<- {"jsonrpc": "2.0", "id": 21, "result": {"completion": {"values": ["C", "Ca", "Cl", "Co", "Cr", "Cu"], "total": 6, "hasMore": false}}}
+   [ok] completion for resource template variable
+-> {"jsonrpc": "2.0", "id": 22, "method": "prompts/get", "params": {"name": "country_briefing", "arguments": {"country": "Argentina", "audience": "traveler"}}}
+<- {"jsonrpc": "2.0", "id": 22, "result": {"description": "Briefing on Argentina for a traveler", "messages": [{"role": "user", "content": {"type": "text", "text": "I need a briefing about Argentina for a traveler. Use the record below as your only source of numb ...
+   [ok] prompt has 5 messages (user/user/user/assistant/user), 2 embedded resources
+-> {"jsonrpc": "2.0", "id": 23, "method": "prompts/get", "params": {"name": "country_briefing", "arguments": {"country": "Atlantis"}}}
+<- {"jsonrpc": "2.0", "id": 23, "error": {"code": -32602, "message": "Invalid prompt arguments", "data": {"errors": ["country: unknown country 'Atlantis' (use a name, ISO alpha-2 or alpha-3 code)"]}}}
+   [ok] prompt argument validation -> -32602
+
+==============================================================================
+== 5. Subscriptions over stdio: notification follows the response that caused it
+==============================================================================
+-> {"jsonrpc": "2.0", "id": 24, "method": "resources/subscribe", "params": {"uri": "dyn://counter"}}
+<- {"jsonrpc": "2.0", "id": 24, "result": {}}
+   [ok] subscribed to dyn://counter
+-> {"jsonrpc": "2.0", "id": 25, "method": "tools/call", "params": {"name": "counter_bump", "arguments": {}}}
+<- {"jsonrpc": "2.0", "id": 25, "result": {"content": [{"type": "text", "text": "{\n  \"bumps\": 2,\n  \"value\": 6\n}"}, {"type": "resource_link", "uri": "dyn://counter", "name": "counter", "mimeType": "application/json"}], "isError": false, "structuredContent": ...
+<= (notification) {"jsonrpc": "2.0", "method": "notifications/resources/updated", "params": {"uri": "dyn://counter"}}
+   [ok] counter_bump -> response, then notifications/resources/updated
+-> {"jsonrpc": "2.0", "id": 26, "method": "tools/call", "params": {"name": "glossary_add", "arguments": {"term": "demo term", "definition": "A term added during the demo."}}}
+<- {"jsonrpc": "2.0", "id": 26, "result": {"content": [{"type": "text", "text": "{\n  \"created_new\": true,\n  \"term\": \"demo term\"\n}"}, {"type": "resource_link", "uri": "glossary://term/demo%20term", "name": "term/demo%20term", "mimeType": "application/json ...
+<= (notification) {"jsonrpc": "2.0", "method": "notifications/resources/list_changed"}
+   [ok] glossary_add of a new term -> notifications/resources/list_changed
+-> {"jsonrpc": "2.0", "id": 27, "method": "resources/read", "params": {"uri": "glossary://term/demo%20term"}}
+<- {"jsonrpc": "2.0", "id": 27, "result": {"contents": [{"uri": "glossary://term/demo%20term", "mimeType": "application/json", "text": "{\n  \"builtin\": false,\n  \"definition\": \"A term added during the demo.\",\n  \"term\": \"demo term\"\n}"}]}}
+   [ok] the new term is a readable resource
+-> {"jsonrpc": "2.0", "id": 28, "method": "resources/unsubscribe", "params": {"uri": "dyn://counter"}}
+<- {"jsonrpc": "2.0", "id": 28, "result": {}}
+   (server process pid 145275 exited with code 0)
+
+==============================================================================
+== 6. RESTART: mutable resources persist (counter, user glossary); --page-size 5 changes paging
+==============================================================================
+   (server process started, pid 145276, transport=stdio)
+-> {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "demo-client", "version": "1.0"}}}
+<- {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {"listChanged": false}, "resources": {"subscribe": true, "listChanged": true}, "prompts": {"listChanged": false}, "experimental": {"mcpres/auditChain": {"algorith ...
+-> {"jsonrpc": "2.0", "method": "notifications/initialized"}   (notification, no reply expected)
+-> {"jsonrpc": "2.0", "id": 2, "method": "resources/read", "params": {"uri": "dyn://counter"}}
+<- {"jsonrpc": "2.0", "id": 2, "result": {"contents": [{"uri": "dyn://counter", "mimeType": "application/json", "text": "{\n  \"bumps\": 2,\n  \"value\": 6\n}"}]}}
+   [ok] counter survived the restart (6)
+   [ok] page size 5 -> 30 pages, user term included
+   (server process pid 145276 exited with code 0)
+
+==============================================================================
+== 7. HTTP: OIDC token, session, subscription and an SSE notification stream
+==============================================================================
+   {"event": "ready", "transport": "http", "url": "http://127.0.0.1:54523/mcp", "port": 54523, "issuer": "http://127.0.0.1:54523", "audience": "mcp-resource-heavy", "auth": "auth enabled", "llm": false, "data_dir": "/tmp/mcpres-demo-4okzwqqo/data"}
+$ python3 -m mcpres client-secret --data-dir /tmp/mcpres-demo-4okzwqqo/data demo-client
+   [ok] access token from the mock issuer (scope 'mcp data:read data:write memory:read memory:write')
+POST /mcp -> {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "demo", "version": "1"}}}
+<- HTTP 200 {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-06-18", "capabilities": {"tools": {"listChanged": false}, "resources": {"subscribe": true, "listChanged": true}, "prompts": {"listChanged": false}, "experimental": {"mcpres/aud ...
+   [ok] initialize -> session id
+POST /mcp -> {"jsonrpc": "2.0", "id": 2, "method": "resources/subscribe", "params": {"uri": "dyn://counter"}}
+<- HTTP 200 {"jsonrpc": "2.0", "id": 2, "result": {}}
+   [ok] subscribed over HTTP
+POST /mcp -> {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "counter_bump", "arguments": {}}}
+   SSE event: {"jsonrpc": "2.0", "method": "notifications/resources/updated", "params": {"uri": "dyn://counter"}}
+<- HTTP 200 {"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "{\n  \"bumps\": 3,\n  \"value\": 7\n}"}, {"type": "resource_link", "uri": "dyn://counter", "name": "counter", "mimeType": "application/json"}], "isError": false, " ...
+   [ok] GET /mcp SSE stream delivered notifications/resources/updated
+   [ok] DELETE /mcp ends the session
+   [ok] the SSE stream was closed by the server
+
+==============================================================================
+== 8. Audit chain across everything above
+==============================================================================
+$ python3 -m mcpres audit-verify --data-dir /tmp/mcpres-demo-4okzwqqo/data
+   [ok] AUDIT CHAIN OK: 140 entries, head f93a5b617cc0985b4e45f51a37d281838ad5e83de4aaace04316eebda8680342
+
+==============================================================================
+== DEMO OK - 29/29 steps passed
+==============================================================================
