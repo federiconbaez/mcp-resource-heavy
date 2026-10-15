@@ -1,17 +1,20 @@
 """Streamable-HTTP-style transport on http.server (stdlib).
 
 * POST /mcp            JSON-RPC request/notification/batch -> 200 application/json, or 202 (nothing to say)
-* GET  /mcp            405 (no server-initiated SSE stream is offered) with ``Allow: POST, DELETE``
+* GET  /mcp            Server-Sent Events stream (needs ``Mcp-Session-Id`` and ``Accept: text/event-stream``) carrying the server's
+                       notifications (resources/updated, resources/list_changed); one stream per session; no resumability
 * DELETE /mcp          terminates the session named by ``Mcp-Session-Id``
 * GET  /.well-known/openid-configuration   mock issuer discovery document (auth enabled only)
 * POST /oauth/token    mock issuer, client_credentials grant (auth enabled only)
 * GET  /healthz        unauthenticated liveness probe
 
-Not offered: SSE streaming responses, resumability, server->client requests. Sessions are bound to
+Not offered: SSE *responses* to POST (replies are always JSON), resumability / Last-Event-ID replay, server->client requests. Sessions are bound to
 the token subject that created them.
 """
 
 import json
+import socket
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -22,6 +25,15 @@ from .auth import BASE_SCOPE, AuthError, OidcIssuer
 from .jsonrpc import INVALID_REQUEST, PARSE_ERROR, dumps
 
 LOOPBACK = {"127.0.0.1", "localhost", "::1", "[::1]"}
+
+
+class _QuietServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer that stays silent when a client simply disappears (typical for long-lived SSE streams)."""
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (ConnectionError, socket.timeout, BrokenPipeError)):
+            return
+        super().handle_error(request, client_address)
 
 
 class HttpTransport:
@@ -41,7 +53,7 @@ class HttpTransport:
         class Handler(_Handler):
             app = transport
 
-        self.httpd = ThreadingHTTPServer((host, port), Handler)
+        self.httpd = _QuietServer((host, port), Handler)
         self.httpd.daemon_threads = True
         self.host, self.port = self.httpd.server_address[0], self.httpd.server_address[1]
         self.base_url = "http://%s:%d" % (self.host if ":" not in self.host else "[%s]" % self.host, self.port)
@@ -63,10 +75,10 @@ class HttpTransport:
         with self._lock:
             now = time.time()
             for sid in [k for k, s in self.sessions.items() if now - s.last_used > self.session_ttl]:
-                del self.sessions[sid]
+                self.sessions.pop(sid).close()
             while len(self.sessions) >= self.max_sessions:
                 oldest = min(self.sessions, key=lambda k: self.sessions[k].last_used)
-                del self.sessions[oldest]
+                self.sessions.pop(oldest).close()
             self.sessions[session.id] = session
 
     def lookup(self, sid):
@@ -74,12 +86,16 @@ class HttpTransport:
             s = self.sessions.get(sid)
             if s and time.time() - s.last_used > self.session_ttl:
                 del self.sessions[sid]
+                s.close()
                 return None
             return s
 
     def drop(self, sid):
         with self._lock:
-            return self.sessions.pop(sid, None) is not None
+            s = self.sessions.pop(sid, None)
+        if s is not None:
+            s.close()  # detaches from the hub: subscriptions and queued notifications are discarded, open SSE streams end
+        return s is not None
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -173,9 +189,69 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/.well-known/openid-configuration" and self.app.issuer:
             return self._json(200, self.app.issuer.discovery_document())
         if path == "/mcp":
-            return self._json(405, {"error": "method_not_allowed", "detail": "no SSE stream offered; use POST"},
-                              {"Allow": "POST, DELETE"})
+            return self._get_stream()
         self._json(404, {"error": "not_found"})
+
+    # ---- GET /mcp: the notification stream --------------------------------------------------
+    KEEPALIVE_SECONDS = 15.0
+
+    def _get_stream(self):
+        app = self.app
+        if not self._origin_ok():
+            return
+        ok, claims = self._authenticate()
+        if not ok:
+            return
+        accept = self.headers.get("Accept", "")
+        if "text/event-stream" not in accept:
+            return self._json(406, {"error": "Accept must include text/event-stream"}, {"Allow": "GET, POST, DELETE"})
+        sid = self.headers.get("Mcp-Session-Id")
+        if not sid:
+            return self._json(400, {"error": "Mcp-Session-Id header required"})
+        session = app.lookup(sid)
+        if session is None or session.outbox is None:
+            return self._json(404, {"error": "unknown_session"})
+        sub = (claims or {}).get("sub", "")
+        if app.auth and sub != (session.claims or {}).get("sub"):
+            self._event("session_hijack_attempt", {"sub": sub}, sid, sub)
+            return self._json(403, {"error": "session_belongs_to_another_subject"})
+        if not session.stream_lock.acquire(blocking=False):
+            return self._json(409, {"error": "a stream is already open for this session"})
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            self._event("stream_open", {}, sid, sub)
+            self.wfile.write(b": stream open\n\n")
+            self.wfile.flush()
+            last_beat = time.time()
+            counter = 0
+            outbox = session.outbox
+            while True:
+                if app.lookup(sid) is None or outbox.closed:
+                    break
+                if app.auth and session.claims is not None and not app.auth.still_valid(session.claims):
+                    break
+                if session.ready and outbox.wait(0.25):
+                    for note in session.drain_notifications():
+                        counter += 1
+                        self.wfile.write(("id: %d\nevent: message\ndata: %s\n\n" % (counter, dumps(note))).encode("ascii"))
+                    self.wfile.flush()
+                elif not session.ready:
+                    time.sleep(0.05)
+                if time.time() - last_beat > self.KEEPALIVE_SECONDS:
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+                    last_beat = time.time()
+        except (BrokenPipeError, ConnectionResetError, socket.timeout, OSError):
+            pass
+        finally:
+            session.stream_lock.release()
+            self._event("stream_closed", {"events": locals().get("counter", 0)}, sid, sub)
 
     def do_POST(self):
         path = self._path()

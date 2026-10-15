@@ -41,12 +41,15 @@ class LifecycleTests(TempDirTestCase):
         for cap in ("tools", "resources", "prompts"):
             self.assertIn(cap, res["capabilities"])
         self.assertNotIn("logging", res["capabilities"])
-        self.assertNotIn("completions", res["capabilities"])
+        self.assertEqual(res["capabilities"]["resources"], {"subscribe": True, "listChanged": True})
+        self.assertEqual(res["capabilities"]["completions"], {})
+        old = self.client().send(init_msg("2024-11-05"))["result"]["capabilities"]
+        self.assertNotIn("completions", old, "the completions capability object does not exist in 2024-11-05")
 
     def test_unadvertised_methods_not_found(self):
         c = self.client()
         c.init()
-        for m in ("logging/setLevel", "completion/complete", "resources/subscribe", "resources/unsubscribe"):
+        for m in ("logging/setLevel", "resources/updated", "sampling/createMessage", "roots/list"):
             self.assertEqual(c.call(m, {})["error"]["code"], -32601, m)
 
     def test_initialize_params_validation(self):
@@ -90,13 +93,13 @@ class LifecycleTests(TempDirTestCase):
 class ToolsResourcesPromptsTests(TempDirTestCase):
     def setUp(self):
         super().setUp()
-        self.server = make_server(self.data_dir, auth=False)
+        self.server = make_server(self.data_dir, auth=False, page_size=500)
         self.c = InProc(self.server.new_session("test"))
         self.c.init()
 
     def test_tools_list_descriptors(self):
         tools = {t["name"]: t for t in self.c.call("tools/list")["result"]["tools"]}
-        self.assertEqual(set(tools), {"memory_store", "memory_recall", "memory_list", "memory_forget"})
+        self.assertGreaterEqual(set(tools), {"memory_store", "memory_recall", "memory_list", "memory_forget", "country_lookup", "unit_convert"})
         self.assertNotIn("title", tools["memory_store"])  # 2025-06-18 only
         self.assertTrue(tools["memory_forget"]["annotations"]["destructiveHint"])
         self.assertTrue(tools["memory_list"]["annotations"]["readOnlyHint"])
@@ -161,7 +164,7 @@ class ToolsResourcesPromptsTests(TempDirTestCase):
         stored = text_of(self.c.tool("memory_store", {"content": "res check", "tags": ["t1"]}))["stored"]
         res = self.c.call("resources/list")["result"]["resources"]
         uris = {r["uri"] for r in res}
-        self.assertTrue({"memory://index", "audit://chain", "memory://entry/%d" % stored["id"]} <= uris)
+        self.assertTrue({"memory://index", "audit://chain", "memory://entry/%d" % stored["id"], "dyn://counter", "blob://sample.png"} <= uris)
         idx = json.loads(self.c.call("resources/read", {"uri": "memory://index"})["result"]["contents"][0]["text"])
         self.assertEqual((idx["total"], idx["tags"]), (1, {"t1": 1}))
         ent = json.loads(self.c.call("resources/read", {"uri": "memory://entry/%d" % stored["id"]})["result"]["contents"][0]["text"])
@@ -169,7 +172,7 @@ class ToolsResourcesPromptsTests(TempDirTestCase):
         tag = json.loads(self.c.call("resources/read", {"uri": "memory://tag/t1"})["result"]["contents"][0]["text"])
         self.assertEqual(len(tag["entries"]), 1)
         tpl = self.c.call("resources/templates/list")["result"]["resourceTemplates"]
-        self.assertEqual({t["uriTemplate"] for t in tpl}, {"memory://entry/{id}", "memory://tag/{tag}"})
+        self.assertGreaterEqual({t["uriTemplate"] for t in tpl}, {"memory://entry/{id}", "memory://tag/{tag}", "country://{iso2}"})
         for bad, code in (("memory://entry/424242", -32002), ("memory://nope", -32002), ("http://x", -32002), ("memory://entry/1/2", -32002)):
             self.assertEqual(self.c.call("resources/read", {"uri": bad})["error"]["code"], code, bad)
         self.assertEqual(self.c.call("resources/read", {})["error"]["code"], -32602)
@@ -185,7 +188,7 @@ class ToolsResourcesPromptsTests(TempDirTestCase):
     def test_prompts(self):
         self.c.tool("memory_store", {"content": "tengo un perro llamado Sol"})
         prompts = {p["name"]: p for p in self.c.call("prompts/list")["result"]["prompts"]}
-        self.assertEqual(set(prompts), {"recall_and_summarize", "memory_digest"})
+        self.assertGreaterEqual(set(prompts), {"recall_and_summarize", "memory_digest", "country_briefing"})
         res = self.c.call("prompts/get", {"name": "recall_and_summarize", "arguments": {"query": "perro", "style": "terse", "limit": "2"}})["result"]
         text = res["messages"][0]["content"]["text"]
         self.assertIn("perro llamado Sol", text)
@@ -197,7 +200,7 @@ class ToolsResourcesPromptsTests(TempDirTestCase):
         self.assertEqual(self.c.call("prompts/get", {"name": "nope"})["error"]["code"], -32602)
         self.assertIn("perro", self.c.call("prompts/get", {"name": "memory_digest", "arguments": {}})["result"]["messages"][0]["content"]["text"])
 
-    def test_list_methods_reject_cursor_accept_meta(self):
+    def test_list_methods_reject_bad_cursor_accept_meta(self):
         for m in ("tools/list", "resources/list", "resources/templates/list", "prompts/list"):
             self.assertEqual(self.c.call(m, {"cursor": "x"})["error"]["code"], -32602)
             self.assertIn("result", self.c.call(m, {"_meta": {"progressToken": "p"}}))

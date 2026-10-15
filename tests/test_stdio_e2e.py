@@ -14,9 +14,10 @@ class StdioE2E(TempDirTestCase):
         self.assertEqual(init["result"]["protocolVersion"], "2025-03-26")
         s.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
         tools = s.call("tools/list", mid=2)["result"]["tools"]
-        self.assertEqual(len(tools), 4)
+        self.assertEqual(len(tools), 16)
         r = s.call("tools/call", {"name": "memory_store", "arguments": {"content": "e2e"}}, mid=3)
         self.assertFalse(r["result"]["isError"])
+        self.assertEqual(s.recv()["method"], "notifications/resources/list_changed", "memory_store changed the resource list; the notification follows the response")
         # batch + notification in one line
         s.send([rpc("ping", mid=10), {"jsonrpc": "2.0", "method": "notifications/initialized"}, rpc("ping", mid=11)])
         out = s.recv()

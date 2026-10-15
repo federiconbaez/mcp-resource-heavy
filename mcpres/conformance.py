@@ -69,7 +69,7 @@ class Env:
         return subprocess.run([sys.executable, "-m", "mcpres", *args], capture_output=True, text=True,
                               env=self.pyenv(), cwd=ROOT, timeout=30)
 
-    def mint(self, scope="mcp memory:read memory:write audit:read", ttl=3600, aud=None, issuer=None, sub="conformance"):
+    def mint(self, scope="mcp data:read data:write memory:read memory:write audit:read", ttl=3600, aud=None, issuer=None, sub="conformance"):
         key = (scope, ttl, aud, issuer, sub)
         if key not in self._tokens:
             args = ["mint-token", "--data-dir", self.data_dir, "--issuer", issuer or self.issuer, "--sub", sub,
@@ -118,6 +118,7 @@ class StdioConn:
         threading.Thread(target=self._pump_err, daemon=True).start()
         self.status = None
         self.headers = {}
+        self.notifications = []  # server notifications seen on stdout, in order (consumed by NoteFeed)
 
     def _pump(self, stream, q):
         for line in iter(stream.readline, b""):
@@ -151,6 +152,9 @@ class StdioConn:
                 raise CheckFailed("non-JSON line on stdout: %r" % text[:100])
             if isinstance(msg, dict) and msg.get("id") == self.SENTINEL:
                 break
+            if isinstance(msg, dict) and "method" in msg and "id" not in msg:
+                self.notifications.append(msg)  # a server notification, not the reply to our frame
+                continue
             got.append(text)
         expect(len(got) <= 1, "server emitted %d outputs for one frame" % len(got))
         return got[0] if got else None
@@ -258,8 +262,90 @@ class Client:
     def tool(self, name, args):
         return self.result("tools/call", {"name": name, "arguments": args})
 
+    def pages(self, method, key, params=None):
+        """Walk every page of a list method; returns (items, page_count)."""
+        items, cursor, n = [], None, 0
+        while True:
+            p = dict(params or {})
+            if cursor:
+                p["cursor"] = cursor
+            res = self.result(method, p)
+            items += res[key]
+            n += 1
+            cursor = res.get("nextCursor")
+            expect(n < 200, "pagination does not terminate")
+            if not cursor:
+                return items, n
+
+    def read_json(self, uri):
+        res = self.result("resources/read", {"uri": uri})
+        return json.loads(res["contents"][0]["text"])
+
     def close(self):
         return self.conn.close()
+
+
+class NoteFeed:
+    """Uniform view of server->client notifications: stdout lines on stdio, a GET /mcp SSE stream on HTTP."""
+
+    def __init__(self, ctx, cl):
+        self.transport = ctx.transport
+        self.conn = cl.conn
+        self.q = queue.Queue()
+        self.sse = None
+        if self.transport == "http":
+            self.http = http.client.HTTPConnection("127.0.0.1", ctx.env.port, timeout=15)
+            self.http.request("GET", "/mcp", headers={"Authorization": "Bearer " + cl.conn.token, "Accept": "text/event-stream",
+                                                       "Mcp-Session-Id": cl.conn.session})
+            self.sse = self.http.getresponse()
+            expect(self.sse.status == 200, "GET /mcp stream refused: %s" % self.sse.status)
+            threading.Thread(target=self._read_sse, daemon=True).start()
+            ctx.opened.append(self)
+
+    def _read_sse(self):
+        data = []
+        try:
+            for raw in iter(self.sse.fp.readline, b""):
+                line = raw.decode("utf-8").rstrip("\r\n")
+                if line.startswith("data: "):
+                    data.append(line[6:])
+                elif line == "" and data:
+                    self.q.put(json.loads("\n".join(data)))
+                    data = []
+        except (OSError, ValueError):
+            pass
+
+    def close(self):
+        if self.sse is not None:
+            self.http.close()
+
+    def take(self, wait=0.0):
+        """Notifications received since the last take, as (method, uri) pairs. ``wait``: seconds to wait for the first one."""
+        if self.transport == "stdio":
+            out, self.conn.notifications[:] = list(self.conn.notifications), []
+            if not out and wait:
+                time.sleep(min(wait, 0.05))
+        else:
+            out = []
+            deadline = time.time() + wait
+            while True:
+                try:
+                    out.append(self.q.get(timeout=max(0.0, deadline - time.time()) if not out else 0.15))
+                except queue.Empty:
+                    break
+        return [(m["method"], (m.get("params") or {}).get("uri")) for m in out]
+
+    def expect(self, method, uri=None, timeout=4.0):
+        seen, deadline = [], time.time() + timeout
+        while time.time() < deadline:
+            seen += self.take(0.3)
+            if (method, uri) in seen:
+                return seen
+        raise CheckFailed("expected %s %s, saw %r" % (method, uri, seen))
+
+    def expect_silence(self, settle=0.5):
+        seen = self.take(settle if self.transport == "http" else 0)
+        expect(not seen, "unexpected notifications: %r" % (seen,))
 
 
 class Ctx:
@@ -452,7 +538,9 @@ def _(c):
     caps = res["capabilities"]
     for cap in ("tools", "resources", "prompts"):
         expect(isinstance(caps.get(cap), dict), cap)
-    expect(caps["tools"].get("listChanged") is False and caps["resources"].get("subscribe") is False, caps)
+    expect(caps["tools"].get("listChanged") is False and caps["prompts"].get("listChanged") is False, caps)
+    expect(caps["resources"].get("subscribe") is True and caps["resources"].get("listChanged") is True, caps)
+    expect(caps.get("completions") == {}, caps)
 
 
 @check("LIF-007", "initialize with invalid params -> -32602", "MCP lifecycle; JSON-RPC 2.0 s5.1")
@@ -547,7 +635,7 @@ def _(c):
     expect("structuredContent" not in old and "structuredContent" in new and "total" in new["structuredContent"], (old, new))
 
 
-@check("TLS-007", "tools/list rejects unsupported cursor; accepts _meta", "MCP utilities: pagination")
+@check("TLS-007", "tools/list rejects an invalid cursor (-32602); accepts _meta", "MCP utilities: pagination")
 def _(c):
     cl = c.client()
     cl.error("tools/list", {"cursor": "abc"}, code=-32602)
@@ -559,8 +647,9 @@ def _(c):
 # ---------------------------------------------------------------------------------
 @check("RES-001", "resources/list exposes memory://index and audit://chain", "MCP server/resources: listing")
 def _(c):
-    uris = {r["uri"] for r in c.client().result("resources/list")["resources"]}
-    expect({"memory://index", "audit://chain"} <= uris, uris)
+    items, _ = c.client().pages("resources/list", "resources")
+    uris = {r["uri"] for r in items}
+    expect({"memory://index", "audit://chain"} <= uris, sorted(uris)[:5])
 
 
 @check("RES-002", "resources/read memory://index returns JSON contents", "MCP server/resources: reading")
@@ -572,7 +661,7 @@ def _(c):
 
 @check("RES-003", "resources/templates/list includes memory://entry/{id}", "MCP server/resources: templates")
 def _(c):
-    tpl = c.client().result("resources/templates/list")["resourceTemplates"]
+    tpl, _ = c.client().pages("resources/templates/list", "resourceTemplates")
     expect("memory://entry/{id}" in {t["uriTemplate"] for t in tpl}, tpl)
 
 
@@ -604,7 +693,8 @@ def _(c):
 # ---------------------------------------------------------------------------------
 @check("PRM-001", "prompts/list declares arguments", "MCP server/prompts: listing")
 def _(c):
-    prompts = {p["name"]: p for p in c.client().result("prompts/list")["prompts"]}
+    items, _ = c.client().pages("prompts/list", "prompts")
+    prompts = {p["name"]: p for p in items}
     args = {a["name"]: a for a in prompts["recall_and_summarize"]["arguments"]}
     expect(args["query"]["required"] is True and "limit" in args, prompts)
 
@@ -741,11 +831,16 @@ def _init_msg(v="2025-03-26"):
     return json.dumps(mk("initialize", 1, {"protocolVersion": v, "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}))
 
 
-@check("HTP-001", "GET /mcp -> 405 with Allow header", "MCP 2025-03-26 transports: Streamable HTTP", ("http",))
+@check("HTP-001", "GET /mcp: needs Accept: text/event-stream (406) and a known session (400/404)", "MCP 2025-03-26 transports: Streamable HTTP", ("http",))
 def _(c):
-    conn = c.conn()
-    st, _ = conn.request("GET", "/mcp", headers={"Accept": "text/event-stream"})
-    expect(st == 405 and "POST" in conn.headers.get("allow", ""), (st, conn.headers))
+    cl = c.client()
+    conn = cl.conn
+    st, _ = conn.request("GET", "/mcp", headers={"Accept": "application/json"})
+    expect(st == 406, st)
+    st, _ = conn.request("GET", "/mcp", headers={"Accept": "text/event-stream"}, use_session=False)
+    expect(st == 400, st)
+    st, _ = conn.request("GET", "/mcp", headers={"Accept": "text/event-stream", "Mcp-Session-Id": "no-such-session"}, use_session=False)
+    expect(st == 404, st)
 
 
 @check("HTP-002", "Notification-only POST -> 202 Accepted, empty body", "MCP 2025-03-26 transports", ("http",))
@@ -913,6 +1008,256 @@ def _(c):
     expect(not verify_file(copy, expect_head=info["head"])["ok"], "anchor must catch tail truncation")
     open(copy, "wb").write(b"".join(lines[:5] + lines[6:]))
     expect(not verify_file(copy)["ok"], "mid-chain deletion not detected")
+
+
+# ---------------------------------------------------------------------------------
+# Resource-heavy checks: pagination, resource kinds, subscriptions, completion, rich prompts
+# ---------------------------------------------------------------------------------
+@check("PAG-001", "resources/list paginates: >1 page, no duplicates, sorted, every page <= 25", "MCP utilities: pagination")
+def _(c):
+    cl = c.client()
+    first = cl.result("resources/list")
+    expect("nextCursor" in first and isinstance(first["nextCursor"], str) and 0 < len(first["resources"]) <= 25, "first page must carry a cursor")
+    items, pages = cl.pages("resources/list", "resources")
+    uris = [r["uri"] for r in items]
+    expect(pages >= 5 and len(uris) == len(set(uris)) and uris == sorted(uris) and len(uris) >= 130, (pages, len(uris)))
+    expect(all(set(r) >= {"uri", "name"} for r in items), "every resource has uri and name")
+
+
+@check("PAG-002", "Invalid / foreign / non-string cursors -> -32602 on all four list methods", "MCP utilities: pagination")
+def _(c):
+    cl = c.client()
+    cur = cl.result("resources/list")["nextCursor"]
+    for method in ("resources/list", "tools/list", "prompts/list", "resources/templates/list"):
+        for bad in ("garbage", "", "!!", 5, ["x"], "a" * 2000):
+            cl.error(method, {"cursor": bad}, code=-32602)
+    for method in ("tools/list", "prompts/list", "resources/templates/list"):
+        cl.error(method, {"cursor": cur}, code=-32602)
+
+
+@check("PAG-003", "Short lists (tools, prompts, templates) fit one page and walk cleanly", "MCP utilities: pagination")
+def _(c):
+    cl = c.client()
+    for method, key, ident in (("tools/list", "tools", "name"), ("prompts/list", "prompts", "name"), ("resources/templates/list", "resourceTemplates", "uriTemplate")):
+        items, pages = cl.pages(method, key)
+        ids = [x[ident] for x in items]
+        expect(len(ids) == len(set(ids)) and ids and pages == 1, (method, pages))
+
+
+@check("RSX-001", "Static resources: stable bytes across reads, correct mime types", "MCP server/resources: static content")
+def _(c):
+    cl = c.client()
+    a = cl.result("resources/read", {"uri": "static://about"})
+    b = cl.result("resources/read", {"uri": "static://about"})
+    expect(a == b and a["contents"][0]["mimeType"] == "text/markdown" and "resource" in a["contents"][0]["text"].lower(), a)
+    expect(len(cl.read_json("data://countries")["countries"]) >= 40 and len(cl.read_json("data://elements")["elements"]) == 36, "datasets")
+
+
+@check("RSX-002", "Templated resources resolve (country/element/unit/glossary); unknown -> -32002 with uri echoed", "MCP server/resources: templates")
+def _(c):
+    cl = c.client()
+    expect(cl.read_json("country://AR")["capital"] == "Buenos Aires", "country")
+    expect(cl.read_json("element://Fe")["number"] == 26 and cl.read_json("element://26")["symbol"] == "Fe", "element")
+    expect(cl.read_json("unit://length")["base_unit"] == "m", "unit")
+    expect(cl.read_json("glossary://term/mime%20type")["term"] == "mime type", "glossary")
+    for bad in ("country://ZZ", "element://Zz", "unit://nope", "glossary://term/nope", "blob://nope", "dyn://nope"):
+        e = cl.error("resources/read", {"uri": bad}, code=-32002)
+        expect(e.get("data", {}).get("uri") == bad, e)
+    tpl, _ = cl.pages("resources/templates/list", "resourceTemplates")
+    expect({"country://{iso2}", "element://{symbol}", "unit://{category}", "glossary://term/{term}", "blob://{name}"} <= {t["uriTemplate"] for t in tpl}, tpl)
+
+
+@check("RSX-003", "Dynamic resources: dyn://counter changes with counter_bump; dyn://clock differs between reads", "MCP server/resources: dynamic content")
+def _(c):
+    cl = c.client()
+    v0 = cl.read_json("dyn://counter")["value"]
+    cl.tool("counter_bump", {"by": 3})
+    expect(cl.read_json("dyn://counter")["value"] == v0 + 3, "counter")
+    t1 = cl.read_json("dyn://clock")["utc"]
+    time.sleep(0.05)
+    t2 = cl.read_json("dyn://clock")["utc"]
+    expect(t1 < t2, (t1, t2))
+
+
+@check("RSX-004", "Binary resources: valid base64, matches listed size/mime, PNG signature, independent SHA-256 via tool", "MCP server/resources: binary content")
+def _(c):
+    import base64
+    import hashlib
+    cl = c.client()
+    items, _ = cl.pages("resources/list", "resources")
+    listed = {r["uri"]: r for r in items}
+    for name, mime in (("sample.png", "image/png"), ("random.bin", "application/octet-stream")):
+        item = cl.result("resources/read", {"uri": "blob://" + name})["contents"][0]
+        expect("blob" in item and "text" not in item and item["mimeType"] == mime, sorted(item))
+        raw = base64.b64decode(item["blob"], validate=True)
+        expect(len(raw) == listed["blob://" + name]["size"] and listed["blob://" + name]["mimeType"] == mime, "size/mime vs listing")
+        digest = json.loads(cl.tool("resource_digest", {"uri": "blob://" + name})["content"][0]["text"])
+        expect(digest["sha256"] == hashlib.sha256(raw).hexdigest() and digest["bytes"] == len(raw), digest)
+        if name.endswith(".png"):
+            expect(raw[:8] == b"\x89PNG\r\n\x1a\n", "png signature")
+
+
+@check("RSX-005", "Every listed resource is readable and has exactly one of text/blob", "MCP server/resources: list/read consistency")
+def _(c):
+    cl = c.client()
+    cl.tool("memory_store", {"content": "listed-and-readable", "tags": ["conf"]})
+    items, _ = cl.pages("resources/list", "resources")
+    for r in items:
+        item = cl.result("resources/read", {"uri": r["uri"]})["contents"][0]
+        expect(item["uri"] == r["uri"] and (("text" in item) != ("blob" in item)), r["uri"])
+
+
+@check("SUB-001", "Capabilities are honest: subscribe/listChanged advertised => subscribe works and notifications really arrive", "MCP server/resources: capabilities")
+def _(c):
+    cl = c.client(init=False)
+    caps = cl.result("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "c", "version": "1"}})["capabilities"]
+    cl.notify("notifications/initialized")
+    feed = NoteFeed(c, cl)
+    expect(caps["resources"]["subscribe"] is True and caps["resources"]["listChanged"] is True, caps)
+    cl.result("resources/subscribe", {"uri": "dyn://counter"})
+    cl.tool("counter_bump", {})
+    feed.expect("notifications/resources/updated", "dyn://counter")
+    term = "conf%d" % int(time.time() * 1000)
+    names_before = {t["name"] for t in cl.pages("tools/list", "tools")[0]}
+    cl.tool("glossary_add", {"term": term, "definition": "Added by the conformance suite."})
+    feed.expect("notifications/resources/list_changed")
+    expect(caps["tools"]["listChanged"] is False and caps["prompts"]["listChanged"] is False, caps)
+    expect(names_before == {t["name"] for t in cl.pages("tools/list", "tools")[0]}, "tools never change, so listChanged:false is honest")
+
+
+@check("SUB-002", "updated only for subscribers; none after unsubscribe; other sessions unaffected", "MCP server/resources: subscriptions")
+def _(c):
+    a, b = c.client(), c.client()
+    fa, fb = NoteFeed(c, a), NoteFeed(c, b)
+    a.result("resources/subscribe", {"uri": "dyn://counter"})
+    a.tool("counter_bump", {})
+    fa.expect("notifications/resources/updated", "dyn://counter")
+    seen_b = fb.take(0.5)
+    expect(("notifications/resources/updated", "dyn://counter") not in seen_b, "b never subscribed: %r" % (seen_b,))
+    a.result("resources/unsubscribe", {"uri": "dyn://counter"})
+    fa.take(0.2)
+    a.tool("counter_bump", {})
+    seen = fa.take(0.5)
+    expect(("notifications/resources/updated", "dyn://counter") not in seen, seen)
+    a.result("resources/unsubscribe", {"uri": "dyn://counter"})  # idempotent
+
+
+@check("SUB-003", "subscribe validates: unknown -> -32002, non-canonical -> -32602 (with canonical hint), bad params -> -32602", "MCP server/resources: subscriptions")
+def _(c):
+    cl = c.client()
+    cl.error("resources/subscribe", {"uri": "country://ZZ"}, code=-32002)
+    cl.error("resources/subscribe", {"uri": "nope://x"}, code=-32002)
+    cl.error("resources/subscribe", {}, code=-32602)
+    cl.error("resources/subscribe", {"uri": 5}, code=-32602)
+    e = cl.error("resources/subscribe", {"uri": "country://ar"}, code=-32602)
+    expect(e["data"]["canonical"] == "country://AR", e)
+    cl.error("resources/unsubscribe", {"uri": "nope://x"}, code=-32002)
+
+
+@check("SUB-004", "glossary_add: new term -> list_changed; replace -> updated(term) without list_changed; remove -> list_changed", "MCP server/resources: notifications")
+def _(c):
+    cl = c.client()
+    feed = NoteFeed(c, cl)
+    term = "sub%d" % int(time.time() * 1000)
+    uri = "glossary://term/" + term
+    cl.tool("glossary_add", {"term": term, "definition": "First."})
+    feed.expect("notifications/resources/list_changed")
+    cl.result("resources/subscribe", {"uri": uri})
+    feed.take(0.3)
+    cl.tool("glossary_add", {"term": term, "definition": "Second."})
+    seen = feed.expect("notifications/resources/updated", uri)
+    seen += feed.take(0.4)
+    expect(("notifications/resources/list_changed", None) not in seen, "a replacement does not change the list: %r" % (seen,))
+    expect(json.loads(cl.result("resources/read", {"uri": uri})["contents"][0]["text"])["definition"] == "Second.", "read-after-notify sees the new value")
+    cl.tool("glossary_remove", {"term": term})
+    feed.expect("notifications/resources/list_changed")
+
+
+@check("SUB-005", "HTTP: the SSE stream ends when the session is DELETEd", "MCP 2025-03-26 transports", ("http",))
+def _(c):
+    cl = c.client()
+    feed = NoteFeed(c, cl)
+    cl.result("resources/subscribe", {"uri": "dyn://counter"})
+    st, _ = cl.conn.request("DELETE", "/mcp")
+    expect(st == 200, st)
+    feed.sse.fp.raw._sock.settimeout(5)
+    try:
+        while feed.sse.fp.readline():
+            pass
+    except OSError:
+        raise CheckFailed("SSE stream still open 5s after DELETE")
+
+
+@check("SUB-006", "stdio: the notification is written right after the response that caused it", "MCP transports: stdio", ("stdio",))
+def _(c):
+    cl = c.client()
+    cl.result("resources/subscribe", {"uri": "dyn://counter"})
+    conn = cl.conn
+    conn.notifications[:] = []
+    out = cl.tool("counter_bump", {})
+    expect(out["isError"] is False, out)
+    expect(conn.notifications == [{"jsonrpc": "2.0", "method": "notifications/resources/updated", "params": {"uri": "dyn://counter"}}], conn.notifications)
+
+
+@check("CMP-001", "completion/complete: prompt arguments, context, result shape, 100-value cap", "MCP utilities: completion")
+def _(c):
+    cl = c.client()
+    r = cl.result("completion/complete", {"ref": {"type": "ref/prompt", "name": "country_briefing"}, "argument": {"name": "country", "value": "ar"}})["completion"]
+    expect(set(r) == {"values", "total", "hasMore"} and r["values"] == ["AR", "Argentina"] and r["total"] == 2 and r["hasMore"] is False, r)
+    r = cl.result("completion/complete", {"ref": {"type": "ref/prompt", "name": "unit_conversion_tutor"}, "argument": {"name": "from_unit", "value": ""},
+                                          "context": {"arguments": {"category": "mass"}}})["completion"]
+    expect(r["values"] == ["mg", "g", "kg", "t", "oz", "lb", "st"], r)
+    r = cl.result("completion/complete", {"ref": {"type": "ref/prompt", "name": "country_briefing"}, "argument": {"name": "country", "value": ""}})["completion"]
+    expect(len(r["values"]) <= 100 and r["total"] >= len(r["values"]), r)
+
+
+@check("CMP-002", "completion/complete for resource templates; invalid refs -> -32602", "MCP utilities: completion")
+def _(c):
+    cl = c.client()
+    r = cl.result("completion/complete", {"ref": {"type": "ref/resource", "uri": "country://{iso2}"}, "argument": {"name": "iso2", "value": "A"}})["completion"]
+    expect(r["values"] == ["AR", "AT", "AU"], r)
+    for bad in ({"ref": {"type": "ref/prompt", "name": "nope"}, "argument": {"name": "x", "value": ""}},
+                {"ref": {"type": "ref/resource", "uri": "nope://{x}"}, "argument": {"name": "x", "value": ""}},
+                {"ref": {"type": "ref/prompt", "name": "country_briefing"}, "argument": {"name": "zzz", "value": ""}},
+                {"ref": {"type": "ref/weird"}, "argument": {"name": "x", "value": ""}}, {"argument": {"name": "x", "value": ""}}):
+        cl.error("completion/complete", bad, code=-32602)
+
+
+@check("PRM-004", "Multi-message prompts: roles alternate sensibly; resources and an image are embedded", "MCP server/prompts: embedded resources")
+def _(c):
+    cl = c.client()
+    res = cl.result("prompts/get", {"name": "country_briefing", "arguments": {"country": "Argentina", "audience": "analyst"}})
+    msgs = res["messages"]
+    expect(len(msgs) >= 4 and {m["role"] for m in msgs} == {"user", "assistant"}, msgs)
+    emb = [m["content"]["resource"] for m in msgs if m["content"]["type"] == "resource"]
+    expect(emb and emb[0]["uri"] == "country://AR" and json.loads(emb[0]["text"])["iso2"] == "AR", emb)
+    ov = cl.result("prompts/get", {"name": "dataset_overview"})["messages"]
+    expect({"text", "resource", "image"} <= {m["content"]["type"] for m in ov}, ov)
+    img = [m["content"] for m in ov if m["content"]["type"] == "image"][0]
+    expect(img["mimeType"] == "image/png", img)
+
+
+@check("PRM-005", "Prompt argument validation: unknown country/enum/extra/missing -> -32602 with an errors list", "MCP server/prompts: argument validation")
+def _(c):
+    cl = c.client()
+    for args in ({}, {"country": "Atlantis"}, {"country": "AR", "audience": "pirate"}, {"country": "AR", "depth": "9"}, {"country": "AR", "x": "y"}):
+        e = cl.error("prompts/get", {"name": "country_briefing", "arguments": args}, code=-32602)
+        expect(isinstance(e["data"]["errors"], list) and e["data"]["errors"], e)
+    cl.error("prompts/get", {"name": "element_study_guide", "arguments": {"elements": "H,He,Li,Be,B,C"}}, code=-32602)
+    cl.error("prompts/get", {"name": "glossary_quiz", "arguments": {"count": "11"}}, code=-32602)
+
+
+@check("TLS-008", "Dataset tools: structured results, resource_link only on 2025-06-18, domain errors are isError", "MCP server/tools")
+def _(c):
+    cl = c.client(version="2025-06-18")
+    res = cl.tool("unit_convert", {"value": 100, "from": "C", "to": "F"})
+    expect(res["isError"] is False and abs(res["structuredContent"]["result"] - 212.0) < 1e-9, res)
+    res = cl.tool("country_lookup", {"query": "Japan"})
+    expect(any(x.get("type") == "resource_link" and x["uri"] == "country://JP" for x in res["content"]), res["content"])
+    old = c.client(version="2025-03-26").tool("country_lookup", {"query": "Japan"})
+    expect(all(x["type"] == "text" for x in old["content"]) and "structuredContent" not in old, old)
+    expect(cl.tool("unit_convert", {"value": 1, "from": "kg", "to": "m"})["isError"] is True, "unit mismatch is a tool error")
+    expect(cl.tool("unit_convert", {"value": "x", "from": "kg", "to": "m"})["isError"] is True, "schema violation is a tool error")
 
 
 # ---------------------------------------------------------------------------------

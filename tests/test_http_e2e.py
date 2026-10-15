@@ -90,9 +90,10 @@ class HttpE2E(Base):
 
     def test_get_is_405_and_unknown_paths_404(self):
         c = Http(self.t.port, self.tok())
-        st, _ = c.req("GET", "/mcp", headers={"Accept": "text/event-stream"})
-        self.assertEqual(st, 405)
-        self.assertEqual(c.headers["allow"], "POST, DELETE")
+        st, _ = c.req("GET", "/mcp", headers={"Accept": "application/json"})
+        self.assertEqual(st, 406, "a GET without Accept: text/event-stream is not a stream request")
+        st, _ = c.req("GET", "/mcp", headers={"Accept": "text/event-stream"}, session=False)
+        self.assertEqual(st, 400, "stream needs a session id")
         self.assertEqual(c.req("GET", "/nope")[0], 404)
         self.assertEqual(c.req("PUT", "/mcp")[0], 405)
         self.assertEqual(c.req("GET", "/healthz")[0], 200)

@@ -30,15 +30,15 @@ MAX_TOKEN_LEN = 8192
 B64URL_RE = re.compile(r"^[A-Za-z0-9_-]*$")
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 BASE_SCOPE = "mcp"
-ALL_SCOPES = ("mcp", "memory:read", "memory:write", "audit:read")
+ALL_SCOPES = ("mcp", "data:read", "data:write", "memory:read", "memory:write", "audit:read")
 DEFAULT_AUDIENCE = "mcp-resource-heavy"
 DEFAULT_ISSUER = "http://127.0.0.1:8765"
 
 # Demo client registry for the mock issuer: client_id -> scopes it may request.
 # Secrets are *derived* from the server secret (see OidcIssuer.client_secret) so nothing is stored.
 DEFAULT_CLIENTS = {
-    "demo-client": ("mcp", "memory:read", "memory:write", "audit:read"),
-    "readonly-client": ("mcp", "memory:read"),
+    "demo-client": ("mcp", "data:read", "data:write", "memory:read", "memory:write", "audit:read"),
+    "readonly-client": ("mcp", "data:read", "memory:read"),
 }
 
 

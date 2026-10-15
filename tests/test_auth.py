@@ -176,7 +176,7 @@ class IssuerTests(unittest.TestCase):
         self.assertEqual(self.i.token_request("Basic !!!", {"grant_type": "client_credentials"})[0], 401)
         ro = {"grant_type": "client_credentials", "client_id": "readonly-client", "client_secret": self.i.client_secret("readonly-client")}
         self.assertEqual(self.i.token_request(None, dict(ro, scope="mcp memory:write"))[1]["error"], "invalid_scope")
-        self.assertEqual(self.i.token_request(None, ro)[1]["scope"], "mcp memory:read")
+        self.assertEqual(self.i.token_request(None, ro)[1]["scope"], "mcp data:read memory:read")
 
     def test_secret_loading(self):
         import os

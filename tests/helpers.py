@@ -61,12 +61,12 @@ class InProc:
         return self.send(rpc("tools/call", {"name": name, "arguments": args}, mid))
 
 
-def make_server(data_dir, auth=True, llm=None, fsync=False):
+def make_server(data_dir, auth=True, llm=None, fsync=False, **kw):
     authenticator = Authenticator(SECRET, ISSUER) if auth else None
-    return McpServer(data_dir, authenticator, llm, audit_fsync=fsync)
+    return McpServer(data_dir, authenticator, llm, audit_fsync=fsync, **kw)
 
 
-def token(scopes="mcp memory:read memory:write audit:read", **kw):
+def token(scopes="mcp data:read data:write memory:read memory:write audit:read", **kw):
     a = Authenticator(SECRET, ISSUER)
     ttl = kw.pop("ttl", 3600)
     return a.mint(scopes=scopes.split(), ttl=ttl, **kw)

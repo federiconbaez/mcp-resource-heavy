@@ -42,6 +42,7 @@ def build_parser():
     s.add_argument("--transport", choices=("stdio", "http"), default="stdio")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8765, help="http port (0 = ephemeral)")
+    s.add_argument("--page-size", type=int, default=25, help="items per page for resources/tools/prompts/templates lists (1-500, default 25)")
     s.add_argument("--no-auth", action="store_true", help="EXPLICITLY disable authentication (demo/dev only)")
     s.add_argument("--allow-origin", action="append", default=[], help="extra allowed Origin for http")
 
@@ -87,7 +88,7 @@ def _authenticator(args, default_issuer):
 def cmd_serve(args):
     llm = LlmClient.from_env()
     auth = None if args.no_auth else _authenticator(args, None if args.transport == "http" else DEFAULT_ISSUER)
-    server = McpServer(args.data_dir, auth, llm)
+    server = McpServer(args.data_dir, auth, llm, page_size=args.page_size)
     note = "auth DISABLED (--no-auth)" if auth is None else "auth enabled"
     if args.transport == "stdio":
         from .transport_stdio import serve_stdio

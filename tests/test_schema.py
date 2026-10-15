@@ -81,11 +81,15 @@ class SchemaTests(unittest.TestCase):
     def test_all_tool_schemas_are_valid_and_strict(self):
         import tempfile
         d = tempfile.mkdtemp()
-        cat = Catalog(MemoryStore(d + "/m.db"))
+        from mcpres.userdata import UserData
+        cat = Catalog(MemoryStore(d + "/m.db"), UserData(d + "/u.db"))
         for t in cat.tools.values():
             schema.check_schema(t.input_schema)
             self.assertIs(t.input_schema["additionalProperties"], False, t.name)
-        for p in cat.PROMPTS.values():
+        from mcpres.prompts import PromptBook
+        from mcpres.resources import ResourceSpace
+        book = PromptBook(ResourceSpace(cat.memory, cat.user, dict), cat.memory)
+        for p in book.specs.values():
             schema.check_schema(p["schema"])
 
     def test_apply_defaults(self):

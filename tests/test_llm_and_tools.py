@@ -50,7 +50,7 @@ class LlmTests(TempDirTestCase):
         names = {t["name"] for t in c.call("tools/list")["result"]["tools"]}
         self.assertNotIn("llm_summarize_memories", names)
         self.assertEqual(c.tool("llm_summarize_memories", {"query": "x"})["error"]["code"], -32602)
-        self.assertEqual(len(names), 4, "server is fully functional without any LLM")
+        self.assertEqual(len(names), 16, "server is fully functional without any LLM")
 
     def test_enabled_via_env_calls_endpoint_with_urllib(self):
         llm = LlmClient.from_env({"MCP_FORGE_LLM_API_KEY": "sk-test", "MCP_FORGE_LLM_BASE_URL": self.base, "MCP_FORGE_LLM_MODEL": "m1"})
