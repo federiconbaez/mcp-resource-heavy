@@ -1,5 +1,14 @@
 # mcp-resource-heavy
 
+> **ES:** Servidor MCP centrado en resources y prompts en Python 3 stdlib: resources estáticos, plantillas, dinámicos y binarios; suscripciones y list_changed por stdio y SSE; paginación por cursor; prompts con resources embebidos y completion/complete.
+> Probar: `python3 -m unittest discover -s tests -t .`
+>
+> **EN:** MCP server built around resources and prompts in Python 3 stdlib: static, templated, dynamic and binary resources; subscriptions and list_changed over stdio and SSE; cursor pagination; prompts with embedded resources and completion/complete.
+> Test: `python3 -m unittest discover -s tests -t .`
+>
+> **Estado / Status:** 205 tests en verde en la box (Python 3.13.5, Linux 6.12, x86_64) el 2026-10-22; **no auditado** por un tercero / **not independently audited**. Implementación didáctica, no un IdP de producción / teaching implementation, not a production IdP. Licencia / License: Apache-2.0.
+
+
 An **MCP server built around resources and prompts**, pure Python 3, standard library only: static, templated, dynamic and
 binary resources over self-authored datasets; **subscriptions and `list_changed` notifications on stdio and on HTTP SSE** (with
 capabilities that are advertised only because they really work); keyset **cursor pagination**; multi-message **prompts with
